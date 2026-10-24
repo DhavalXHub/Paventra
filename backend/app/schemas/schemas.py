@@ -25,6 +25,7 @@ class UserOut(BaseModel):
     email: str
     full_name: str
     role: str
+    team_id: Optional[str] = None
     is_active: bool
     created_at: datetime
 

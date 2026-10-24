@@ -48,9 +48,30 @@ async def seed():
                 print(f"Team already exists: {t['name']}")
 
         await db.commit()
+
+        # Seed repair team member account for Team Alpha
+        alpha_team_res = await db.execute(select(RepairTeam).where(RepairTeam.name == "Team Alpha"))
+        alpha_team = alpha_team_res.scalar_one_or_none()
+        if alpha_team:
+            existing_member = await db.execute(select(User).where(User.email == "team.alpha@paventra.local"))
+            if not existing_member.scalar_one_or_none():
+                team_user = User(
+                    email="team.alpha@paventra.local",
+                    full_name="Team Alpha Lead",
+                    hashed_password=hash_password("TeamAlpha2024!"),
+                    role=UserRole.REPAIR_TEAM,
+                    team_id=alpha_team.id,
+                )
+                db.add(team_user)
+                await db.commit()
+                print("Created repair team user: team.alpha@paventra.local / TeamAlpha2024!")
+            else:
+                print("Repair team user already exists: team.alpha@paventra.local")
+
         print("\nSeed complete.")
         print(f"  Coordinator login: {COORDINATOR_EMAIL}")
         print(f"  Password:          {COORDINATOR_PASSWORD}")
+        print("  Repair Team login: team.alpha@paventra.local / TeamAlpha2024!")
 
 
 if __name__ == "__main__":

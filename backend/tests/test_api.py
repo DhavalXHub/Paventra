@@ -280,3 +280,83 @@ async def test_citizen_my_reports_endpoint():
         assert res.status_code == 200
         my_reports = res.json()
         assert any(r["public_ref"] == ref for r in my_reports)
+
+
+@pytest.mark.asyncio
+async def test_repair_team_workflow():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.models.team import RepairTeam
+        from app.models.report import RepairAssignment
+
+        async with AsyncSessionLocal() as db:
+            coord_res = await db.execute(select(User).where(User.email == "test_coord@paventra.local"))
+            coord = coord_res.scalar_one()
+            coord_token = create_access_token(coord.id)
+
+            # Ensure team exists
+            team_res = await db.execute(select(RepairTeam).where(RepairTeam.name == "Test Team"))
+            team = team_res.scalar_one_or_none()
+            if not team:
+                team = RepairTeam(name="Test Team", description="Test Crew")
+                db.add(team)
+                await db.flush()
+
+            # Create test repair team user
+            t_user_res = await db.execute(select(User).where(User.email == "test_team_user@paventra.local"))
+            team_user = t_user_res.scalar_one_or_none()
+            if not team_user:
+                team_user = User(
+                    email="test_team_user@paventra.local",
+                    full_name="Team User",
+                    hashed_password=hash_password("TeamPass123!"),
+                    role=UserRole.REPAIR_TEAM,
+                    team_id=team.id,
+                )
+                db.add(team_user)
+                await db.flush()
+            team_token = create_access_token(team_user.id)
+
+            # Create report and assign
+            rpt = Report(
+                public_ref=f"PAV-{uuid.uuid4().hex[:8].upper()}",
+                source=ReportSource.CITIZEN,
+                status=ReportStatus.VERIFIED,
+                damage_type=DamageType.POTHOLE,
+            )
+            db.add(rpt)
+            await db.flush()
+
+            assignment = RepairAssignment(
+                report_id=rpt.id,
+                team_id=team.id,
+                assigned_by_id=coord.id,
+                notes="Patch pothole ASAP",
+            )
+            db.add(assignment)
+            rpt.status = ReportStatus.ASSIGNED
+            await db.commit()
+            rep_id = rpt.id
+
+        # 1. Team views assigned jobs
+        team_headers = {"Authorization": f"Bearer {team_token}"}
+        jobs_res = await client.get("/api/v1/teams/my-jobs", headers=team_headers)
+        assert jobs_res.status_code == 200
+        jobs = jobs_res.json()
+        assert any(j["report_id"] == rep_id for j in jobs)
+
+        # 2. Team starts work
+        start_res = await client.patch(f"/api/v1/teams/jobs/{rep_id}/start", headers=team_headers)
+        assert start_res.status_code == 200
+        assert start_res.json()["status"] == "in_progress"
+
+        # 3. Team uploads completion evidence
+        comp_img = io.BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF" + b"\x00" * 50)
+        comp_res = await client.post(
+            f"/api/v1/reports/{rep_id}/completion",
+            data={"notes": "Pothole filled and leveled"},
+            files={"photo": ("completed.jpg", comp_img, "image/jpeg")},
+            headers=team_headers,
+        )
+        assert comp_res.status_code == 200
+        assert comp_res.json()["status"] == "pending_verification"

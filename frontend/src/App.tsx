@@ -18,6 +18,7 @@ import NotificationsPage from './pages/NotificationsPage';
 import InspectionsPage from './pages/InspectionsPage';
 import RegisterPage from './pages/RegisterPage';
 import MyReportsPage from './pages/MyReportsPage';
+import TeamJobsPage from './pages/TeamJobsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,13 @@ function RequireCoordinator({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isCoordinator } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (!isCoordinator) return <Navigate to="/report" replace />;
+  return <>{children}</>;
+}
+
+function RequireTeam({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isRepairTeam, isCoordinator } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isRepairTeam && !isCoordinator) return <Navigate to="/report" replace />;
   return <>{children}</>;
 }
 
@@ -67,6 +75,7 @@ function App() {
             <Route path="/track" element={<TrackPage />} />
             <Route path="/track/:ref" element={<TrackPage />} />
             <Route path="/my-reports" element={<MyReportsPage />} />
+            <Route path="/team/jobs" element={<RequireTeam><TeamJobsPage /></RequireTeam>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             {/* Coordinator */}

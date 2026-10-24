@@ -15,7 +15,7 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
-from app.core.deps import get_db, get_current_user, get_optional_user, require_coordinator
+from app.core.deps import get_db, get_current_user, get_optional_user, require_coordinator, require_team_or_above
 from app.models.user import User, UserRole
 from app.models.report import (
     Report, MediaAsset, ReportStatusHistory, RepairAssignment,
@@ -770,7 +770,7 @@ async def submit_completion(
     notes: Optional[str] = Form(None),
     photo: Optional[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_coordinator),
+    current_user: User = Depends(require_team_or_above),
 ):
     """Upload completion evidence and mark report as pending verification."""
     result = await db.execute(

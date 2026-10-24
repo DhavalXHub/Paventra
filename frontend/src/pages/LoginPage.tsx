@@ -23,6 +23,8 @@ export default function LoginPage() {
       const role = localStorage.getItem('user_role');
       if (role === 'citizen') {
         navigate('/my-reports');
+      } else if (role === 'repair_team') {
+        navigate('/team/jobs');
       } else {
         navigate('/coordinator');
       }

@@ -8,10 +8,12 @@ from sqlalchemy import select
 import asyncio
 import json
 
-from app.core.deps import get_db, get_current_user, require_coordinator
-from app.models.user import User
+from app.core.deps import get_db, get_current_user, require_coordinator, require_team_or_above
+from app.models.user import User, UserRole
 from app.models.team import RepairTeam
+from app.models.report import Report, RepairAssignment, ReportStatus, ReportStatusHistory
 from app.models.audit import AuditEvent
+from sqlalchemy.orm import selectinload
 from app.schemas.schemas import TeamCreate, TeamOut, NotificationOut, AnalyticsSummary, TrendPoint
 from app.services.notifications.service import (
     create_notification, get_notifications, mark_read, subscribe_sse, unsubscribe_sse
@@ -63,6 +65,97 @@ async def update_team(
         setattr(team, k, v)
     await db.flush()
     return team
+
+
+@teams_router.get("/my-jobs", response_model=list[dict])
+async def list_my_repair_jobs(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_team_or_above),
+):
+    """View assigned repair jobs for the team or coordinator."""
+    q = (
+        select(RepairAssignment)
+        .options(
+            selectinload(RepairAssignment.report).selectinload(Report.media_assets),
+            selectinload(RepairAssignment.team),
+        )
+    )
+    if current_user.role == UserRole.REPAIR_TEAM and current_user.team_id:
+        q = q.where(RepairAssignment.team_id == current_user.team_id)
+
+    rows = (await db.execute(q)).scalars().all()
+    out = []
+    for a in rows:
+        r = a.report
+        if not r:
+            continue
+        out.append({
+            "assignment_id": a.id,
+            "report_id": r.id,
+            "public_ref": r.public_ref,
+            "status": r.status.value,
+            "damage_type": r.damage_type.value,
+            "severity": r.severity.value if r.severity else None,
+            "latitude": r.latitude,
+            "longitude": r.longitude,
+            "address_hint": r.address_hint,
+            "description": r.description,
+            "team_id": a.team_id,
+            "team_name": a.team.name if a.team else None,
+            "target_date": a.target_date.isoformat() if a.target_date else None,
+            "assignment_notes": a.notes,
+            "completion_notes": a.completion_notes,
+            "assigned_at": a.assigned_at.isoformat(),
+            "media_assets": [
+                {
+                    "id": m.id,
+                    "file_name": m.file_name,
+                    "asset_type": m.asset_type,
+                    "uploaded_at": m.uploaded_at.isoformat(),
+                }
+                for m in r.media_assets
+            ],
+        })
+    return out
+
+
+@teams_router.patch("/jobs/{report_id}/start", response_model=dict)
+async def start_repair_job(
+    report_id: str,
+    notes: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_team_or_above),
+):
+    """Mark repair work as in_progress."""
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report.status != ReportStatus.ASSIGNED:
+        raise HTTPException(status_code=400, detail=f"Cannot start work on report in status {report.status.value}")
+
+    old_status = report.status
+    report.status = ReportStatus.IN_PROGRESS
+    history = ReportStatusHistory(
+        report_id=report.id,
+        from_status=old_status.value,
+        to_status=ReportStatus.IN_PROGRESS.value,
+        changed_by_id=current_user.id,
+        changed_by_email=current_user.email,
+        notes=notes or "Repair team commenced on-site work",
+    )
+    db.add(history)
+    audit = AuditEvent(
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        action="work_commenced",
+        resource_type="report",
+        resource_id=report.id,
+        details={"status": "in_progress"},
+    )
+    db.add(audit)
+    await db.commit()
+    return {"status": "in_progress", "report_id": report_id}
 
 
 # ─── Notifications ────────────────────────────────────────────────────────────
