@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Upload, Link2, AlertTriangle, Clock } from 'lucide-react';
+import { ArrowLeft, Upload, Link2, AlertTriangle, Clock, ShieldCheck, FileText, Image as ImageIcon } from 'lucide-react';
 import api from '../lib/api';
-import type { Report, Team } from '../types';
+import type { Report, Team, AuditEvent } from '../types';
 import { StatusBadge, SeverityBadge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Alert } from '../components/Feedback';
@@ -35,6 +35,12 @@ export default function ReportDetailPage() {
   const { data: teams } = useQuery<Team[]>({
     queryKey: ['teams'],
     queryFn: () => api.get('/teams').then((r) => r.data),
+  });
+
+  const { data: auditEvents } = useQuery<AuditEvent[]>({
+    queryKey: ['audit', id],
+    queryFn: () => api.get(`/audit/${id}`).then((r) => r.data),
+    enabled: !!id,
   });
 
   interface DuplicateCandidate {
@@ -128,9 +134,6 @@ export default function ReportDetailPage() {
   if (!report) return <div className="p-6 text-gray-500">Report not found.</div>;
 
   const nextStatuses = NEXT_TRANSITIONS[report.status] ?? [];
-  const mediaUrl = report.media_assets[0]
-    ? `/uploads/reports/${report.media_assets[0].file_name}`
-    : null;
 
   return (
     <div className="p-6 space-y-5 max-w-4xl">
@@ -162,10 +165,39 @@ export default function ReportDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left: evidence + details */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Photo */}
-          {mediaUrl && (
+          {/* Media Evidence Gallery */}
+          {report.media_assets?.length > 0 && (
             <Card padding={false} className="overflow-hidden">
-              <img src={mediaUrl} alt="Damage evidence" className="w-full object-cover max-h-72" />
+              <div className="p-3 border-b border-gray-100 flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-800 flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-accent" />
+                  Visual Evidence ({report.media_assets.length})
+                </span>
+              </div>
+              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {report.media_assets.map((asset) => {
+                  const url = asset.asset_type === 'completion_photo'
+                    ? `/uploads/completions/${asset.file_name}`
+                    : `/uploads/reports/${asset.file_name}`;
+
+                  const label =
+                    asset.asset_type === 'completion_photo'
+                      ? 'After-Repair Evidence'
+                      : asset.asset_type === 'additional_evidence'
+                      ? 'Citizen Additional Evidence'
+                      : 'Initial Report Photo';
+
+                  return (
+                    <div key={asset.id} className="relative rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                      <img src={url} alt={label} className="w-full h-44 object-cover" />
+                      <div className="p-2 flex items-center justify-between text-[11px] bg-white border-t border-gray-100">
+                        <span className="font-medium text-gray-700">{label}</span>
+                        <span className="text-gray-400">{formatDateTime(asset.uploaded_at)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </Card>
           )}
 
@@ -279,6 +311,38 @@ export default function ReportDetailPage() {
               ))}
             </div>
           </Card>
+
+          {/* Audit trail */}
+          {auditEvents && auditEvents.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-accent" />
+                  Audit Trail
+                </CardTitle>
+              </CardHeader>
+              <div className="space-y-2.5">
+                {auditEvents.map((ev) => (
+                  <div key={ev.id} className="p-2.5 bg-gray-50 rounded-md border border-gray-100 text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-gray-800 uppercase tracking-wider text-[10px] bg-white px-1.5 py-0.5 rounded border border-gray-200">
+                        {ev.action.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-[11px] text-gray-400">{formatDateTime(ev.created_at)}</span>
+                    </div>
+                    {ev.actor_email && (
+                      <p className="text-gray-500 text-[11px]">Actor: {ev.actor_email}</p>
+                    )}
+                    {ev.details && Object.keys(ev.details).length > 0 && (
+                      <div className="text-[11px] text-gray-600 font-mono bg-white p-1.5 rounded border border-gray-100 mt-1 overflow-x-auto">
+                        {JSON.stringify(ev.details)}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
 
         {/* Right: actions */}

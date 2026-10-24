@@ -82,6 +82,16 @@ async def test_citizen_report_submission_and_tracking():
         assert track_json["status"] == "submitted"
         assert len(track_json["history"]) >= 1
 
+        # 3. Citizen submits additional evidence
+        ev_img = io.BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF" + b"\x00" * 50)
+        ev_res = await client.post(
+            f"/api/v1/reports/track/{pub_ref}/evidence",
+            data={"notes": "Pothole depth has increased after rain"},
+            files={"image": ("extra.jpg", ev_img, "image/jpeg")},
+        )
+        assert ev_res.status_code == 200
+        assert ev_res.json()["status"] == "ok"
+
 
 @pytest.mark.asyncio
 async def test_invalid_coordinates_rejected():

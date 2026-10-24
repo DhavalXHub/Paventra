@@ -325,6 +325,67 @@ async def track_report(public_ref: str, db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.post("/track/{public_ref}/evidence", response_model=dict)
+async def submit_additional_evidence(
+    public_ref: str,
+    notes: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Allows citizens to provide additional evidence/photos for their report."""
+    result = await db.execute(
+        select(Report).where(Report.public_ref == public_ref.upper())
+    )
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.status in (ReportStatus.RESOLVED, ReportStatus.REJECTED):
+        raise HTTPException(status_code=400, detail="Cannot attach evidence to closed reports")
+
+    media_id = None
+    if image:
+        content_type = image.content_type or ""
+        if content_type not in settings.ALLOWED_IMAGE_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {content_type}")
+        content = await image.read()
+        if len(content) > settings.max_upload_bytes:
+            raise HTTPException(status_code=413, detail="File exceeds maximum allowed upload size")
+
+        upload_dir = Path(settings.UPLOAD_DIR) / "reports"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = await _safe_filename(image.filename or "evidence.jpg")
+        file_path = upload_dir / safe_name
+        async with aiofiles.open(file_path, "wb") as f:
+            await f.write(content)
+
+        media = MediaAsset(
+            report_id=report.id,
+            file_path=str(file_path),
+            file_name=safe_name,
+            mime_type=content_type,
+            file_size_bytes=len(content),
+            asset_type="additional_evidence",
+        )
+        db.add(media)
+        await db.flush()
+        media_id = media.id
+
+    if notes or image:
+        audit = AuditEvent(
+            actor_id=report.submitter_id,
+            actor_email=report.submitter_email or "citizen",
+            action="additional_evidence_submitted",
+            resource_type="report",
+            resource_id=report.id,
+            details={"notes": notes, "media_id": media_id},
+        )
+        db.add(audit)
+        await db.commit()
+
+    return {"status": "ok", "message": "Additional evidence attached successfully"}
+
+
 # ─── Coordinator: list reports ────────────────────────────────────────────────
 
 @router.get("", response_model=ReportListResponse)
