@@ -203,3 +203,41 @@ export interface TrackResponse {
   review_reason: string | null;
   history: Array<{ status: string; changed_at: string; notes: string | null }>;
 }
+
+export interface InspectionJob {
+  id: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'partial';
+  media_type: string;
+  frame_sample_rate: number;
+  total_frames_sampled: number | null;
+  progress_percent: number;
+  detections_count: number;
+  reports_created: number;
+  has_gps_track: boolean;
+  notes: string | null;
+  error_message: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface InspectionFrame {
+  id: string;
+  job_id: string;
+  frame_index: number;
+  frame_path: string;
+  annotated_path: string | null;
+  timestamp_seconds: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  detections: Array<{
+    class_code: string;
+    damage_type: string;
+    confidence: number;
+    bbox: number[];
+  }>;
+  confidence: number | null;
+  is_duplicate: boolean;
+  report_id: string | null;
+  created_at: string;
+}

@@ -90,6 +90,23 @@ async def read_notification(
     return {"id": n.id, "is_read": n.is_read}
 
 
+@notifications_router.patch("/read-all")
+async def read_all_notifications(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.models.notification import Notification
+    from sqlalchemy import update as sql_update
+    from datetime import datetime, timezone
+    await db.execute(
+        sql_update(Notification)
+        .where(Notification.user_id == current_user.id, Notification.is_read == False)  # noqa: E712
+        .values(is_read=True, read_at=datetime.now(timezone.utc))
+    )
+    await db.commit()
+    return {"marked_read": True}
+
+
 @notifications_router.get("/stream")
 async def notification_stream(current_user: User = Depends(get_current_user)):
     queue = subscribe_sse(current_user.id)

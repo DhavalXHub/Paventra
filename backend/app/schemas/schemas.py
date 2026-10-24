@@ -236,15 +236,38 @@ class TrendPoint(BaseModel):
 
 # ─── Inspections ─────────────────────────────────────────────────────────────
 
+class InspectionFrameOut(BaseModel):
+    id: str
+    job_id: str
+    frame_index: int
+    frame_path: str
+    annotated_path: Optional[str]
+    timestamp_seconds: Optional[float]
+    latitude: Optional[float]
+    longitude: Optional[float]
+    detections: list[dict]
+    confidence: Optional[float]
+    is_duplicate: bool
+    report_id: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class InspectionJobOut(BaseModel):
     id: str
     status: str
     media_type: str
+    frame_sample_rate: int
+    total_frames_sampled: Optional[int]
     progress_percent: float
     detections_count: int
     reports_created: int
+    has_gps_track: bool
+    notes: Optional[str]
     error_message: Optional[str]
     created_at: datetime
+    started_at: Optional[datetime]
     completed_at: Optional[datetime]
 
     model_config = {"from_attributes": True}

@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, Calendar, User, Cpu, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { ArrowLeft, Upload, Link2, AlertTriangle, Clock } from 'lucide-react';
 import api from '../lib/api';
 import type { Report, Team } from '../types';
 import { StatusBadge, SeverityBadge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Alert } from '../components/Feedback';
 import { Select, Textarea } from '../components/FormElements';
-import { formatDateTime, formatRelative, NEXT_TRANSITIONS, STATUS_LABELS } from '../lib/constants';
+import { formatDateTime, NEXT_TRANSITIONS, STATUS_LABELS } from '../lib/constants';
 import { Card, CardHeader, CardTitle } from '../components/Card';
 
 export default function ReportDetailPage() {
@@ -22,6 +22,10 @@ export default function ReportDetailPage() {
   const [targetDate, setTargetDate] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [completionNotes, setCompletionNotes] = useState('');
+  const [completionPhoto, setCompletionPhoto] = useState<File | null>(null);
+  const completionFileRef = useRef<HTMLInputElement>(null);
+  const [showDuplicates, setShowDuplicates] = useState(false);
 
   const { data: report, isLoading } = useQuery<Report>({
     queryKey: ['report', id],
@@ -31,6 +35,53 @@ export default function ReportDetailPage() {
   const { data: teams } = useQuery<Team[]>({
     queryKey: ['teams'],
     queryFn: () => api.get('/teams').then((r) => r.data),
+  });
+
+  interface DuplicateCandidate {
+    id: string;
+    public_ref: string;
+    distance_meters: number | null;
+    similarity_score: number;
+    same_damage_type: boolean;
+    time_diff_days: number;
+  }
+
+  const { data: duplicates, isFetching: dupesFetching } = useQuery<DuplicateCandidate[]>({
+    queryKey: ['report-duplicates', id],
+    queryFn: () => api.get(`/reports/${id}/duplicates`).then((r) => r.data),
+    enabled: showDuplicates,
+    staleTime: 60000,
+  });
+
+  const completionMutation = useMutation({
+    mutationFn: ({ notes, photo }: { notes: string; photo: File | null }) => {
+      const form = new FormData();
+      if (notes) form.append('notes', notes);
+      if (photo) form.append('photo', photo);
+      return api.post(`/reports/${id}/completion`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['report', id] });
+      setActionSuccess('Completion evidence submitted — report moved to Pending Verification');
+      setCompletionNotes('');
+      setCompletionPhoto(null);
+    },
+    onError: (err: { response?: { data?: { detail?: string } } }) => {
+      setActionError(err?.response?.data?.detail ?? 'Failed to submit completion');
+    },
+  });
+
+  const linkDupeMutation = useMutation({
+    mutationFn: (duplicateId: string) =>
+      api.post(`/reports/${id}/duplicates/link`, { duplicate_id: duplicateId }),
+    onSuccess: () => {
+      setActionSuccess('Duplicate linked successfully');
+    },
+    onError: (err: { response?: { data?: { detail?: string } } }) => {
+      setActionError(err?.response?.data?.detail ?? 'Failed to link duplicate');
+    },
   });
 
   const statusMutation = useMutation({
@@ -334,6 +385,102 @@ export default function ReportDetailPage() {
               </div>
             </Card>
           )}
+
+          {/* Completion evidence upload (in-progress/assigned) */}
+          {(report.status === 'in_progress' || report.status === 'assigned') && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Submit completion</CardTitle>
+              </CardHeader>
+              <div className="space-y-3">
+                <p className="text-xs text-gray-500">
+                  Upload evidence that work is complete. This moves the report to Pending Verification.
+                </p>
+                <Textarea
+                  label="Completion notes"
+                  value={completionNotes}
+                  onChange={(e) => setCompletionNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Describe what was done"
+                />
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    After-repair photo (optional)
+                  </label>
+                  <input
+                    ref={completionFileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => setCompletionPhoto(e.target.files?.[0] ?? null)}
+                  />
+                  <button
+                    onClick={() => completionFileRef.current?.click()}
+                    className="flex items-center gap-2 px-3 py-2 text-xs border border-dashed border-gray-300
+                      rounded-md text-gray-500 hover:border-accent hover:text-accent transition-colors w-full"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    {completionPhoto ? completionPhoto.name : 'Choose photo…'}
+                  </button>
+                </div>
+                <Button
+                  className="w-full"
+                  loading={completionMutation.isPending}
+                  onClick={() => completionMutation.mutate({ notes: completionNotes, photo: completionPhoto })}
+                >
+                  Submit completion
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          {/* Duplicate candidate review */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Duplicate check</CardTitle>
+              <button
+                onClick={() => setShowDuplicates((v) => !v)}
+                className="text-xs text-accent hover:underline"
+              >
+                {showDuplicates ? 'Hide' : 'Check duplicates'}
+              </button>
+            </CardHeader>
+            {showDuplicates && (
+              <div className="mt-2">
+                {dupesFetching ? (
+                  <p className="text-xs text-gray-400">Searching…</p>
+                ) : !duplicates?.length ? (
+                  <p className="text-xs text-gray-500">No likely duplicates found nearby.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {duplicates.map((d) => (
+                      <li key={d.id} className="p-2 bg-gray-50 rounded-md text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-semibold text-gray-800">{d.public_ref}</span>
+                          <span className="text-gray-500">{Math.round(d.similarity_score * 100)}% match</span>
+                        </div>
+                        <div className="text-gray-500 space-x-3">
+                          {d.distance_meters !== null && <span>{Math.round(d.distance_meters)}m away</span>}
+                          <span>{d.time_diff_days.toFixed(0)}d apart</span>
+                          {d.same_damage_type && <span>Same type</span>}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          loading={linkDupeMutation.isPending}
+                          onClick={() => linkDupeMutation.mutate(d.id)}
+                          className="!text-xs !py-0.5 mt-1"
+                        >
+                          <Link2 className="w-3 h-3 mr-1" />
+                          Mark as duplicate
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </Card>
         </div>
       </div>
     </div>

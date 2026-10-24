@@ -31,8 +31,8 @@ from app.schemas.schemas import (
 from app.services.vision.inference import detector
 from app.services.prioritization.fuzzy_engine import compute_priority
 from app.services.notifications.service import create_notification
-from app.services.duplicate_detection.detector import find_duplicate_candidates
-from app.services.geospatial.distance import validate_coordinates
+from app.services.duplicate_detection.detector import find_duplicate_candidates as _find_dupes
+from app.services.geospatial.distance import validate_coordinates, haversine_distance
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -569,3 +569,201 @@ async def get_map_markers(
         }
         for r in rows
     ]
+
+
+# ─── Duplicate candidates ────────────────────────────────────────────────────
+
+@router.get("/{report_id}/duplicates", response_model=list[dict])
+async def get_duplicate_candidates(
+    report_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_coordinator),
+):
+    """Return potential duplicate reports for coordinator review."""
+    result = await db.execute(
+        select(Report)
+        .where(Report.id == report_id)
+    )
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Fetch other open reports to compare against
+    candidates_q = await db.execute(
+        select(Report).where(
+            Report.id != report_id,
+            Report.status.in_([
+                ReportStatus.SUBMITTED, ReportStatus.UNDER_REVIEW,
+                ReportStatus.VERIFIED, ReportStatus.ASSIGNED, ReportStatus.IN_PROGRESS,
+            ])
+        ).limit(500)
+    )
+    other_reports = candidates_q.scalars().all()
+
+    existing = [
+        {
+            "id": r.id,
+            "public_ref": r.public_ref,
+            "latitude": r.latitude,
+            "longitude": r.longitude,
+            "damage_type": r.damage_type.value if r.damage_type else "unknown",
+            "created_at": r.created_at,
+            "status": r.status.value,
+        }
+        for r in other_reports
+    ]
+
+    dupes = _find_dupes(
+        new_report_lat=report.latitude,
+        new_report_lon=report.longitude,
+        new_report_type=report.damage_type.value if report.damage_type else "unknown",
+        new_report_created_at=report.created_at,
+        existing_reports=existing,
+    )
+
+    return [
+        {
+            "id": c.report_id,
+            "public_ref": c.public_ref,
+            "distance_meters": c.distance_meters,
+            "similarity_score": c.similarity_score,
+            "same_damage_type": c.same_damage_type,
+            "time_diff_days": round(c.time_diff_days, 1),
+        }
+        for c in dupes
+    ]
+
+
+@router.post("/{report_id}/duplicates/link", response_model=dict)
+async def link_duplicate(
+    report_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_coordinator),
+):
+    """Mark another report as a duplicate of this one."""
+    duplicate_id = body.get("duplicate_id")
+    if not duplicate_id:
+        raise HTTPException(status_code=400, detail="duplicate_id required")
+
+    # Verify both exist
+    r1 = await db.execute(select(Report).where(Report.id == report_id))
+    r2 = await db.execute(select(Report).where(Report.id == duplicate_id))
+    if not r1.scalar_one_or_none() or not r2.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Check not already linked
+    existing = await db.execute(
+        select(DuplicateLink).where(
+            DuplicateLink.primary_report_id == report_id,
+            DuplicateLink.duplicate_report_id == duplicate_id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        return {"status": "already_linked"}
+
+    link = DuplicateLink(
+        primary_report_id=report_id,
+        duplicate_report_id=duplicate_id,
+        confirmed=True,
+        confirmed_by_id=current_user.id,
+    )
+    db.add(link)
+
+    audit = AuditEvent(
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        action="duplicate_link",
+        resource_type="report",
+        resource_id=report_id,
+        details={"duplicate_id": duplicate_id},
+    )
+    db.add(audit)
+    await db.commit()
+    return {"status": "linked", "primary": report_id, "duplicate": duplicate_id}
+
+
+# ─── Completion evidence upload ───────────────────────────────────────────────
+
+@router.post("/{report_id}/completion", response_model=dict)
+async def submit_completion(
+    report_id: str,
+    notes: Optional[str] = Form(None),
+    photo: Optional[UploadFile] = File(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_coordinator),
+):
+    """Upload completion evidence and mark report as pending verification."""
+    result = await db.execute(
+        select(Report)
+        .options(selectinload(Report.assignment))
+        .where(Report.id == report_id)
+    )
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.status not in (ReportStatus.IN_PROGRESS, ReportStatus.ASSIGNED):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot submit completion for report in status: {report.status.value}"
+        )
+
+    photo_path = None
+    if photo:
+        content_type = photo.content_type or ""
+        allowed_types = {"image/jpeg", "image/png", "image/webp"}
+        if content_type not in allowed_types:
+            raise HTTPException(status_code=400, detail="Unsupported completion photo type")
+        content = await photo.read()
+        if len(content) > settings.max_upload_bytes:
+            raise HTTPException(status_code=413, detail="File too large")
+        upload_dir = Path(settings.UPLOAD_DIR) / "completions"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = await _safe_filename(photo.filename or "completion.jpg")
+        file_path = upload_dir / safe_name
+        async with aiofiles.open(file_path, "wb") as f:
+            await f.write(content)
+        photo_path = str(file_path)
+
+        # Save as media asset
+        media = MediaAsset(
+            report_id=report_id,
+            file_path=photo_path,
+            file_name=safe_name,
+            mime_type=content_type,
+            file_size_bytes=len(content),
+            asset_type="completion_photo",
+        )
+        db.add(media)
+
+    if report.assignment:
+        if notes:
+            report.assignment.completion_notes = notes
+        if photo_path:
+            report.assignment.completion_photo_path = photo_path
+
+    old_status = report.status
+    report.status = ReportStatus.PENDING_VERIFICATION
+    history = ReportStatusHistory(
+        report_id=report.id,
+        from_status=old_status.value,
+        to_status=ReportStatus.PENDING_VERIFICATION.value,
+        changed_by_id=current_user.id,
+        changed_by_email=current_user.email,
+        notes=notes or "Completion evidence submitted",
+    )
+    db.add(history)
+
+    audit = AuditEvent(
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        action="completion_submitted",
+        resource_type="report",
+        resource_id=report_id,
+        details={"has_photo": photo_path is not None, "notes": notes},
+    )
+    db.add(audit)
+    await db.commit()
+    return {"status": ReportStatus.PENDING_VERIFICATION.value, "photo_uploaded": photo_path is not None}
+

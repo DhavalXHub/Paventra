@@ -14,6 +14,8 @@ import ReportDetailPage from './pages/ReportDetailPage';
 import MapPage from './pages/MapPage';
 import TeamsPage from './pages/TeamsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import NotificationsPage from './pages/NotificationsPage';
+import InspectionsPage from './pages/InspectionsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -39,9 +41,11 @@ function CoordinatorRoutes() {
           <Route index element={<DashboardPage />} />
           <Route path="reports" element={<ReportsListPage />} />
           <Route path="reports/:id" element={<ReportDetailPage />} />
+          <Route path="inspections" element={<InspectionsPage />} />
           <Route path="map" element={<MapPage />} />
           <Route path="teams" element={<TeamsPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="*" element={<Navigate to="/coordinator" replace />} />
         </Routes>
       </CoordinatorLayout>

@@ -86,6 +86,8 @@ class Report(Base):
     priority_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     priority_explanation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
+    inspection_frame_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
     review_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewed_by_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

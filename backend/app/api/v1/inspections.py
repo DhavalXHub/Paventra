@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.deps import get_db, require_coordinator
 from app.models.user import User
 from app.models.inspection import InspectionJob, InspectionFrame, InspectionStatus
-from app.schemas.schemas import InspectionJobOut
+from app.schemas.schemas import InspectionJobOut, InspectionFrameOut
 from app.services.vision.video_inspection import process_inspection_job_async
 from app.db.database import AsyncSessionLocal
 
@@ -82,3 +82,17 @@ async def get_inspection_job(
     if not job:
         raise HTTPException(status_code=404, detail="Inspection job not found")
     return job
+
+
+@router.get("/{job_id}/frames", response_model=List[InspectionFrameOut])
+async def list_inspection_frames(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_coordinator),
+):
+    result = await db.execute(
+        select(InspectionFrame)
+        .where(InspectionFrame.job_id == job_id)
+        .order_by(InspectionFrame.frame_index.asc())
+    )
+    return list(result.scalars().all())

@@ -1,12 +1,13 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { MapPin, LayoutDashboard, FileText, Users, BarChart3, Bell, LogOut, Menu, X } from 'lucide-react';
+import { MapPin, LayoutDashboard, FileText, Users, BarChart3, Bell, LogOut, Menu, X, Video } from 'lucide-react';
 import { useAuth } from '../features/auth/AuthContext';
 import { useState } from 'react';
 
 const NAV_ITEMS = [
   { to: '/coordinator', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/coordinator/reports', icon: FileText, label: 'Reports' },
+  { to: '/coordinator/inspections', icon: Video, label: 'Inspections' },
   { to: '/coordinator/map', icon: MapPin, label: 'Map' },
   { to: '/coordinator/teams', icon: Users, label: 'Teams' },
   { to: '/coordinator/analytics', icon: BarChart3, label: 'Analytics' },

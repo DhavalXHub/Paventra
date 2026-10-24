@@ -3,6 +3,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 import io
+import uuid
 
 from app.main import app
 from app.core.security import hash_password, create_access_token
@@ -127,8 +128,9 @@ async def test_coordinator_workflow_state_transitions():
             coord_token = create_access_token(coord.id)
 
             # Create a test report
+            unique_ref = f"PAV-{uuid.uuid4().hex[:8].upper()}"
             rpt = Report(
-                public_ref="PAV-TESTFLOW",
+                public_ref=unique_ref,
                 source=ReportSource.CITIZEN,
                 status=ReportStatus.SUBMITTED,
                 damage_type=DamageType.POTHOLE,
@@ -165,3 +167,77 @@ async def test_coordinator_workflow_state_transitions():
         )
         assert r2.status_code == 200
         assert r2.json()["status"] == "verified"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_candidates_and_linking():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncSessionLocal() as db:
+            coord_res = await db.execute(select(User).where(User.email == "test_coord@paventra.local"))
+            coord = coord_res.scalar_one()
+            coord_token = create_access_token(coord.id)
+
+            r1 = Report(
+                public_ref=f"PAV-{uuid.uuid4().hex[:8].upper()}",
+                source=ReportSource.CITIZEN,
+                status=ReportStatus.SUBMITTED,
+                damage_type=DamageType.POTHOLE,
+                latitude=19.0760,
+                longitude=72.8777,
+            )
+            r2 = Report(
+                public_ref=f"PAV-{uuid.uuid4().hex[:8].upper()}",
+                source=ReportSource.CITIZEN,
+                status=ReportStatus.SUBMITTED,
+                damage_type=DamageType.POTHOLE,
+                latitude=19.0761,
+                longitude=72.8778,
+            )
+            db.add_all([r1, r2])
+            await db.commit()
+            await db.refresh(r1)
+            await db.refresh(r2)
+            id1, id2 = r1.id, r2.id
+
+        headers = {"Authorization": f"Bearer {coord_token}"}
+        dup_res = await client.get(f"/api/v1/reports/{id1}/duplicates", headers=headers)
+        assert dup_res.status_code == 200
+        dups = dup_res.json()
+        assert any(d["id"] == id2 for d in dups)
+
+        # Link duplicate
+        link_res = await client.post(
+            f"/api/v1/reports/{id1}/duplicates/link",
+            json={"duplicate_id": id2},
+            headers=headers,
+        )
+        assert link_res.status_code == 200
+        assert link_res.json()["status"] == "linked"
+
+
+@pytest.mark.asyncio
+async def test_method_b_inspection_creation_and_listing():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncSessionLocal() as db:
+            coord_res = await db.execute(select(User).where(User.email == "test_coord@paventra.local"))
+            coord = coord_res.scalar_one()
+            coord_token = create_access_token(coord.id)
+
+        headers = {"Authorization": f"Bearer {coord_token}"}
+        fake_video = io.BytesIO(b"fake_video_bytes")
+        files = {"media_file": ("road_survey.mp4", fake_video, "video/mp4")}
+        data = {"sample_rate": "15", "notes": "Sector 4 survey run"}
+
+        res = await client.post("/api/v1/inspections", data=data, files=files, headers=headers)
+        assert res.status_code == 201
+        job_data = res.json()
+        assert "id" in job_data
+        assert job_data["status"] == "queued"
+        job_id = job_data["id"]
+
+        list_res = await client.get("/api/v1/inspections", headers=headers)
+        assert list_res.status_code == 200
+        jobs = list_res.json()
+        assert any(j["id"] == job_id for j in jobs)
