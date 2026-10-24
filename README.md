@@ -120,24 +120,20 @@ npm run dev
 
 ## 🧪 Automated Testing
 
-Paventra features an automated test suite verifying API contracts, state transitions, duplicate detection, geospatial validation, and fuzzy inference logic:
+Paventra features a comprehensive 41-test automated suite verifying computer vision inference, 2D geometric severity estimation, video inspection interpolation, duplicate intelligence across all 4 operational scenarios, fuzzy logic rule engines, and API state machine transitions:
 
 ```powershell
 cd d:\Paventra\backend
 python -m pytest -v
 ```
 
-### Test Suite Summary (21/21 Passing)
-- `test_health_and_readiness`: Server uptime and database connectivity.
-- `test_citizen_report_submission_and_tracking`: Public submission, media upload, tracking token access.
-- `test_invalid_coordinates_rejected`: Geospatial range validation and boundary rejection.
-- `test_coordinator_authorization_protection`: RBAC verification safeguarding coordinator endpoints.
-- `test_coordinator_workflow_state_transitions`: Complete lifecycle transitions and rejection constraints.
-- `test_duplicate_candidates_and_linking`: Proximity search and bilateral duplicate linking.
-- `test_method_b_inspection_creation_and_listing`: Video survey job creation and frame tracking.
-- `test_citizen_my_reports_endpoint`: Citizen submission history isolation.
-- `test_repair_team_workflow`: Repair crew job claiming, commencement, and completion submission.
-- `test_verified_severity_and_analytics_serialization`: Verified severity updates, priority recalculation, and enum serialization.
+### Test Suite Summary (41/41 Passing)
+- **API & Workflow Contracts (`tests/test_api.py` — 10 tests):** Server health, citizen upload & unguessable reference codes, geospatial range validation, RBAC enforcement, finite state machine transitions, duplicate bilateral linking, video inspection job queue, citizen reports isolation, repair team work order completion, verified severity confirmation & priority recalculation.
+- **Duplicate Report & Observation Intelligence (`tests/test_duplicate.py` — 8 tests):** Haversine distance weighting, temporal decay, same-type scoring, repeated consecutive video frame grouping, recurring multi-pass inspection defect matching, crowdsourced citizen duplicate clustering, nearby distinct defect separation, and perceptual dHash image similarity.
+- **Soft Computing: Fuzzy Priority Engine (`tests/test_fuzzy.py` — 7 tests):** Input bounds clipping, critical hazard rules, low priority rules, deterministic weighted baseline scoring, top contributing factors explainability, safe missing-input midpoint defaults, and time unresolved monotonic priority growth.
+- **Geospatial Geometry (`tests/test_geospatial.py` — 3 tests):** Latitude/longitude validation, Haversine known distance verification, radius search boundaries.
+- **Method B Video Inspection Engine (`tests/test_video.py` — 5 tests):** Synchronized GPS tracklog JSON parsing, corrupt file recovery, spatial-temporal coordinate interpolation within 2.0s windows, out-of-window GPS rejection (no coordinate fabrication), empty track handling.
+- **Computer Vision & Severity Estimation (`tests/test_vision.py` — 8 tests):** RDD2022 4-class taxonomy mapping (`D00`, `D10`, `D20`, `D40`), YOLOv8 model loading, missing image path error handling, corrupt image rejection, minimum dimension bounds validation, visible area footprint severity scaling, elongation aspect ratio analysis, review-required triggers, and provisional optical disclaimers.
 - `test_compute_similarity_score`, `test_far_apart_low_similarity`, `test_find_duplicate_candidates`: Duplicate scoring algorithms.
 - `test_fuzzy_input_clipping`, `test_critical_priority_rule`, `test_low_priority_scenario`, `test_baseline_score_calculation`, `test_contributing_factors_explanation`: Fuzzy priority engine mechanics.
 - `test_validate_coordinates`, `test_haversine_known_distance`, `test_coordinates_within_radius`: Geospatial math formulas.
