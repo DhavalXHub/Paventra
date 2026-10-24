@@ -1,0 +1,169 @@
+{
+  "spark_or_fallback_results": {
+    "engine": "REFERENCE_PANDAS",
+    "total_reports": 150,
+    "source_distribution": {
+      "citizen": 103,
+      "inspection": 47
+    },
+    "status_distribution": {
+      "submitted": 42,
+      "resolved": 37,
+      "assigned": 22,
+      "verified": 20,
+      "in_progress": 13,
+      "under_review": 11,
+      "rejected": 5
+    },
+    "damage_category_matrix": {
+      "crack": {
+        "critical": 17,
+        "high": 6,
+        "low": 11,
+        "moderate": 9
+      },
+      "pothole": {
+        "critical": 5,
+        "high": 11,
+        "low": 11,
+        "moderate": 14
+      },
+      "rutting": {
+        "critical": 8,
+        "high": 5,
+        "low": 9,
+        "moderate": 10
+      },
+      "surface_deterioration": {
+        "critical": 10,
+        "high": 9,
+        "low": 10,
+        "moderate": 5
+      }
+    },
+    "monthly_trend": {
+      "2026-01": 55,
+      "2026-02": 48,
+      "2026-03": 47
+    },
+    "overdue_count_gt_30d": 79,
+    "average_repair_duration_days": 9.92,
+    "top_spatial_clusters": [
+      {
+        "grid_lat": 19.08,
+        "grid_lon": 72.88,
+        "damage_count": 23,
+        "avg_priority": 55.6
+      },
+      {
+        "grid_lat": 19.07,
+        "grid_lon": 72.88,
+        "damage_count": 11,
+        "avg_priority": 53.0
+      },
+      {
+        "grid_lat": 19.07,
+        "grid_lon": 72.87,
+        "damage_count": 6,
+        "avg_priority": 49.2
+      },
+      {
+        "grid_lat": 19.08,
+        "grid_lon": 72.87,
+        "damage_count": 4,
+        "avg_priority": 54.2
+      },
+      {
+        "grid_lat": 19.01,
+        "grid_lon": 72.84,
+        "damage_count": 3,
+        "avg_priority": 68.5
+      }
+    ]
+  },
+  "reference_results": {
+    "engine": "REFERENCE_PANDAS",
+    "total_reports": 150,
+    "source_distribution": {
+      "citizen": 103,
+      "inspection": 47
+    },
+    "status_distribution": {
+      "submitted": 42,
+      "resolved": 37,
+      "assigned": 22,
+      "verified": 20,
+      "in_progress": 13,
+      "under_review": 11,
+      "rejected": 5
+    },
+    "damage_category_matrix": {
+      "crack": {
+        "critical": 17,
+        "high": 6,
+        "low": 11,
+        "moderate": 9
+      },
+      "pothole": {
+        "critical": 5,
+        "high": 11,
+        "low": 11,
+        "moderate": 14
+      },
+      "rutting": {
+        "critical": 8,
+        "high": 5,
+        "low": 9,
+        "moderate": 10
+      },
+      "surface_deterioration": {
+        "critical": 10,
+        "high": 9,
+        "low": 10,
+        "moderate": 5
+      }
+    },
+    "monthly_trend": {
+      "2026-01": 55,
+      "2026-02": 48,
+      "2026-03": 47
+    },
+    "overdue_count_gt_30d": 79,
+    "average_repair_duration_days": 9.92,
+    "top_spatial_clusters": [
+      {
+        "grid_lat": 19.08,
+        "grid_lon": 72.88,
+        "damage_count": 23,
+        "avg_priority": 55.6
+      },
+      {
+        "grid_lat": 19.07,
+        "grid_lon": 72.88,
+        "damage_count": 11,
+        "avg_priority": 53.0
+      },
+      {
+        "grid_lat": 19.07,
+        "grid_lon": 72.87,
+        "damage_count": 6,
+        "avg_priority": 49.2
+      },
+      {
+        "grid_lat": 19.08,
+        "grid_lon": 72.87,
+        "damage_count": 4,
+        "avg_priority": 54.2
+      },
+      {
+        "grid_lat": 19.01,
+        "grid_lon": 72.84,
+        "damage_count": 3,
+        "avg_priority": 68.5
+      }
+    ]
+  },
+  "parity_confirmed": true,
+  "analyzed_at": "2026-10-24T16:38:00.342764+00:00",
+  "input_records_count": 150
+}

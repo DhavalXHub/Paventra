@@ -93,6 +93,8 @@ export interface Report {
   address_hint: string | null;
   ai_confidence: number | null;
   ai_damage_type: string | null;
+  ai_bounding_boxes?: Record<string, any> | null;
+  ai_inference_ms?: number | null;
   priority_score: number | null;
   review_reason: string | null;
   created_at: string;

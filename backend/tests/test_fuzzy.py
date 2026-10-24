@@ -66,3 +66,28 @@ def test_contributing_factors_explanation():
     factor_names = [f["factor"] for f in result.top_contributing_factors]
     assert any("severity" in name.lower() for name in factor_names)
     assert any("traffic" in name.lower() for name in factor_names)
+
+
+def test_missing_input_defaults():
+    """Verify that None values for optional inputs are handled with safe midpoints."""
+    result = compute_priority(
+        severity_label=None,
+        traffic_exposure=None,
+        time_unresolved_days=None,
+        safety_urgency=None,
+    )
+    assert 25.0 <= result.priority_score <= 75.0
+    assert result.inputs["severity"] == 5.0
+    assert result.inputs["traffic_exposure"] == 5.0
+    assert result.inputs["time_unresolved_days"] == 0.0
+    assert result.inputs["safety_urgency"] == 5.0
+
+
+def test_time_unresolved_monotonic_increase():
+    """Increasing unresolved duration (holding other factors constant) must raise or preserve priority."""
+    r_day0 = compute_priority(severity_label="moderate", traffic_exposure=5.0, time_unresolved_days=0.0)
+    r_day30 = compute_priority(severity_label="moderate", traffic_exposure=5.0, time_unresolved_days=30.0)
+    r_day180 = compute_priority(severity_label="moderate", traffic_exposure=5.0, time_unresolved_days=180.0)
+
+    assert r_day30.priority_score >= r_day0.priority_score
+    assert r_day180.priority_score >= r_day30.priority_score

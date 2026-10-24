@@ -179,15 +179,34 @@ async def process_inspection_job_async(job_id: str, session_factory):
                         }
                         dam_type = dtype_map.get(best_det.damage_type, DamageType.OTHER)
                         
+                        sev_obj = inf_result.severity_assessment
                         sev = SeverityLevel.LOW
-                        if best_det.confidence >= 0.8:
+                        sev_numeric = None
+                        if sev_obj:
+                            sev_map = {
+                                "low": SeverityLevel.LOW,
+                                "moderate": SeverityLevel.MODERATE,
+                                "high": SeverityLevel.HIGH,
+                                "critical": SeverityLevel.CRITICAL,
+                            }
+                            sev = sev_map.get(sev_obj.level, SeverityLevel.MODERATE)
+                            sev_numeric = sev_obj.score
+                        elif best_det.confidence >= 0.75:
                             sev = SeverityLevel.HIGH
-                        elif best_det.confidence >= 0.6:
+                        elif best_det.confidence >= 0.55:
                             sev = SeverityLevel.MODERATE
 
                         import secrets, string
                         ref = "INSP-" + "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
                         
+                        pr = compute_priority(
+                            severity_label=sev.value,
+                            traffic_exposure=5.0,
+                            time_unresolved_days=0.0,
+                            safety_urgency=7.0 if sev == SeverityLevel.CRITICAL else (6.0 if sev == SeverityLevel.HIGH else 4.0),
+                            severity_numeric=sev_numeric,
+                        )
+
                         report = Report(
                             public_ref=ref,
                             source=ReportSource.INSPECTION,
@@ -202,6 +221,26 @@ async def process_inspection_job_async(job_id: str, session_factory):
                             ai_confidence=best_det.confidence,
                             ai_damage_type=best_det.damage_type,
                             ai_inference_ms=inf_result.inference_ms,
+                            ai_bounding_boxes={
+                                "detections": detections_list,
+                                "severity_estimation": {
+                                    "level": sev_obj.level,
+                                    "score": sev_obj.score,
+                                    "method": sev_obj.method,
+                                    "features": sev_obj.features,
+                                    "confidence": sev_obj.confidence,
+                                    "uncertainty": sev_obj.uncertainty,
+                                    "review_required": sev_obj.review_required,
+                                    "provisional": sev_obj.provisional,
+                                    "disclaimer": sev_obj.disclaimer,
+                                } if sev_obj else None,
+                            },
+                            priority_score=pr.priority_score,
+                            priority_explanation={
+                                "label": pr.priority_label,
+                                "factors": pr.top_contributing_factors,
+                                "engine": pr.engine_used,
+                            },
                             inspection_frame_id=job_frame.id,
                         )
                         db.add(report)

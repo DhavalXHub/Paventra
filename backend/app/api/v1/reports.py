@@ -72,6 +72,26 @@ async def _run_ai_inference(image_path: str, report: Report, db: AsyncSession) -
             if best:
                 report.ai_confidence = best.confidence
                 report.ai_damage_type = best.damage_type
+                report.ai_inference_ms = result.inference_ms
+
+                # Grounded severity estimation from visible 2D geometry
+                sev_obj = result.severity_assessment
+                if sev_obj:
+                    sev_map = {
+                        "low": SeverityLevel.LOW,
+                        "moderate": SeverityLevel.MODERATE,
+                        "high": SeverityLevel.HIGH,
+                        "critical": SeverityLevel.CRITICAL,
+                    }
+                    report.severity = sev_map.get(sev_obj.level, SeverityLevel.MODERATE)
+                    report.severity_is_estimated = True
+                elif best.confidence >= 0.75:
+                    report.severity = SeverityLevel.HIGH
+                    report.severity_is_estimated = True
+                else:
+                    report.severity = SeverityLevel.MODERATE
+                    report.severity_is_estimated = True
+
                 report.ai_bounding_boxes = {
                     "detections": [
                         {
@@ -81,16 +101,19 @@ async def _run_ai_inference(image_path: str, report: Report, db: AsyncSession) -
                             "bbox": d.bbox_xyxy,
                         }
                         for d in result.detections
-                    ]
+                    ],
+                    "severity_estimation": {
+                        "level": sev_obj.level,
+                        "score": sev_obj.score,
+                        "method": sev_obj.method,
+                        "features": sev_obj.features,
+                        "confidence": sev_obj.confidence,
+                        "uncertainty": sev_obj.uncertainty,
+                        "review_required": sev_obj.review_required,
+                        "provisional": sev_obj.provisional,
+                        "disclaimer": sev_obj.disclaimer,
+                    } if sev_obj else None,
                 }
-                report.ai_inference_ms = result.inference_ms
-                # Infer severity from confidence
-                if best.confidence >= 0.8:
-                    report.severity = SeverityLevel.HIGH
-                elif best.confidence >= 0.6:
-                    report.severity = SeverityLevel.MODERATE
-                else:
-                    report.severity = SeverityLevel.LOW
                 # Map damage type
                 dtype_map = {
                     "pothole": DamageType.POTHOLE,
@@ -201,6 +224,7 @@ async def submit_report(
 
     # Run AI inference synchronously (fast) if model available
     ai_assessment = None
+    sev_numeric = None
     if detector.is_available():
         result = detector.infer(str(file_path))
         if result.model_available and not result.error and result.best_detection:
@@ -208,28 +232,55 @@ async def submit_report(
             report.ai_confidence = best.confidence
             report.ai_damage_type = best.damage_type
             report.ai_inference_ms = result.inference_ms
+
+            sev_obj = result.severity_assessment
+            if sev_obj:
+                sev_map = {
+                    "low": SeverityLevel.LOW,
+                    "moderate": SeverityLevel.MODERATE,
+                    "high": SeverityLevel.HIGH,
+                    "critical": SeverityLevel.CRITICAL,
+                }
+                report.severity = sev_map.get(sev_obj.level, SeverityLevel.MODERATE)
+                report.severity_is_estimated = True
+                sev_numeric = sev_obj.score
+            elif best.confidence >= 0.75:
+                report.severity = SeverityLevel.HIGH
+                report.severity_is_estimated = True
+            else:
+                report.severity = SeverityLevel.MODERATE
+                report.severity_is_estimated = True
+
             report.ai_bounding_boxes = {
                 "detections": [
                     {"class_code": d.class_code, "damage_type": d.damage_type,
                      "confidence": d.confidence, "bbox": d.bbox_xyxy}
                     for d in result.detections
-                ]
+                ],
+                "severity_estimation": {
+                    "level": sev_obj.level,
+                    "score": sev_obj.score,
+                    "method": sev_obj.method,
+                    "features": sev_obj.features,
+                    "confidence": sev_obj.confidence,
+                    "uncertainty": sev_obj.uncertainty,
+                    "review_required": sev_obj.review_required,
+                    "provisional": sev_obj.provisional,
+                    "disclaimer": sev_obj.disclaimer,
+                } if sev_obj else None,
             }
-            if best.confidence >= 0.8:
-                report.severity = SeverityLevel.HIGH
-            elif best.confidence >= 0.6:
-                report.severity = SeverityLevel.MODERATE
-            else:
-                report.severity = SeverityLevel.LOW
             dtype_map = {"pothole": DamageType.POTHOLE, "crack": DamageType.CRACK}
             report.damage_type = dtype_map.get(best.damage_type, dt_enum)
             ai_assessment = {
                 "damage_type": best.damage_type,
                 "confidence": best.confidence,
                 "severity_estimated": report.severity.value if report.severity else None,
+                "severity_score": sev_obj.score if sev_obj else None,
+                "severity_method": sev_obj.method if sev_obj else None,
+                "review_required": sev_obj.review_required if sev_obj else False,
                 "model_available": True,
-                "disclaimer": (
-                    "This is an AI-estimated assessment. Confidence and severity "
+                "disclaimer": sev_obj.disclaimer if sev_obj else (
+                    "This is an AI-estimated provisional assessment. Confidence and severity "
                     "are predictions only and must be verified by a coordinator."
                 ),
             }
@@ -248,6 +299,7 @@ async def submit_report(
             pr = compute_priority(
                 severity_label=report.severity.value,
                 time_unresolved_days=days_unresolved,
+                severity_numeric=sev_numeric,
             )
             report.priority_score = pr.priority_score
             report.priority_explanation = {
@@ -732,6 +784,9 @@ async def get_duplicate_candidates(
             "similarity_score": c.similarity_score,
             "same_damage_type": c.same_damage_type,
             "time_diff_days": round(c.time_diff_days, 1),
+            "distinction_category": c.distinction_category,
+            "recommendation": c.recommendation,
+            "reasoning": c.match_evidence.get("reasoning", ""),
         }
         for c in dupes
     ]

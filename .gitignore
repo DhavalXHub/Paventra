@@ -14,8 +14,10 @@ venv/
 backend/uploads/reports/*
 backend/uploads/completions/*
 backend/uploads/inspections/*
+backend/uploads/*.json
 !backend/uploads/*/.gitkeep
 backend/.env
+*.pt
 
 # Node
 node_modules/

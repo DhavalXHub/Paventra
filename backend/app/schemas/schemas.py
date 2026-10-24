@@ -126,6 +126,8 @@ class ReportOut(BaseModel):
     address_hint: Optional[str]
     ai_confidence: Optional[float]
     ai_damage_type: Optional[str]
+    ai_bounding_boxes: Optional[dict] = None
+    ai_inference_ms: Optional[float] = None
     priority_score: Optional[float]
     review_reason: Optional[str]
     created_at: datetime

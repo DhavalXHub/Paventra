@@ -248,6 +248,32 @@ async def analytics_trends(
     return await get_trends(db, days)
 
 
+@analytics_router.get("/batch")
+async def analytics_batch_summary(
+    _: User = Depends(require_coordinator),
+):
+    """Returns the latest PySpark / Reference big data batch analytics cluster results."""
+    from pathlib import Path
+    import json
+    candidates = [
+        Path("uploads/batch_analytics_summary.json"),
+        Path("backend/uploads/batch_analytics_summary.json"),
+        Path("../analytics/reports/batch_analytics_summary.json"),
+        Path("analytics/reports/batch_analytics_summary.json"),
+    ]
+    for p in candidates:
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+
+    from analytics.jobs.road_damage_batch_analytics import execute_analytics_suite
+    results, _ = execute_analytics_suite()
+    return results
+
+
 # ─── Audit ────────────────────────────────────────────────────────────────────
 audit_router = APIRouter(prefix="/audit", tags=["audit"])
 

@@ -42,17 +42,22 @@ except ImportError:
 
 @dataclass
 class FuzzyInputs:
-    """Validated inputs for the fuzzy priority engine."""
-    severity: float           # 0-10
-    traffic_exposure: float   # 0-10
-    time_unresolved_days: float  # 0-365
-    safety_urgency: float     # 0-10
+    """Validated inputs for the fuzzy priority engine with safe default midpoints."""
+    severity: Optional[float] = 5.0           # 0-10 (default 5.0)
+    traffic_exposure: Optional[float] = 5.0   # 0-10 (default 5.0)
+    time_unresolved_days: Optional[float] = 0.0  # 0-365 (default 0.0)
+    safety_urgency: Optional[float] = 5.0     # 0-10 (default 5.0)
 
     def __post_init__(self) -> None:
-        self.severity = float(np.clip(self.severity, 0.0, 10.0))
-        self.traffic_exposure = float(np.clip(self.traffic_exposure, 0.0, 10.0))
-        self.time_unresolved_days = float(np.clip(self.time_unresolved_days, 0.0, 365.0))
-        self.safety_urgency = float(np.clip(self.safety_urgency, 0.0, 10.0))
+        # Default midpoints for missing values with documented justification
+        s = 5.0 if self.severity is None else self.severity
+        t = 5.0 if self.traffic_exposure is None else self.traffic_exposure
+        d = 0.0 if self.time_unresolved_days is None else self.time_unresolved_days
+        u = 5.0 if self.safety_urgency is None else self.safety_urgency
+        self.severity = float(np.clip(s, 0.0, 10.0))
+        self.traffic_exposure = float(np.clip(t, 0.0, 10.0))
+        self.time_unresolved_days = float(np.clip(d, 0.0, 365.0))
+        self.safety_urgency = float(np.clip(u, 0.0, 10.0))
 
 
 @dataclass
@@ -260,25 +265,31 @@ _engine = FuzzyPriorityEngine()
 
 
 def compute_priority(
-    severity_label: str,
-    traffic_exposure: float = 5.0,
-    time_unresolved_days: float = 0.0,
-    safety_urgency: float = 5.0,
+    severity_label: Optional[str] = "moderate",
+    traffic_exposure: Optional[float] = 5.0,
+    time_unresolved_days: Optional[float] = 0.0,
+    safety_urgency: Optional[float] = 5.0,
     severity_numeric: Optional[float] = None,
 ) -> FuzzyResult:
     """
     Public API for computing repair priority.
     
     Args:
-        severity_label: "low", "moderate", "high", or "critical"
-        traffic_exposure: 0-10 (default 5)
-        time_unresolved_days: days since report created
-        safety_urgency: 0-10 (default 5)
+        severity_label: "low", "moderate", "high", or "critical" (default "moderate")
+        traffic_exposure: 0-10 (default 5.0 if None)
+        time_unresolved_days: days since report created (default 0.0 if None)
+        safety_urgency: 0-10 (default 5.0 if None)
         severity_numeric: optional override for numeric severity (0-10)
     """
     _engine.initialize()
     
-    sev_numeric = severity_numeric if severity_numeric is not None else _severity_from_label(severity_label)
+    if severity_numeric is not None:
+        sev_numeric = severity_numeric
+    elif severity_label:
+        sev_numeric = _severity_from_label(severity_label)
+    else:
+        sev_numeric = 5.0
+
     inputs = FuzzyInputs(
         severity=sev_numeric,
         traffic_exposure=traffic_exposure,

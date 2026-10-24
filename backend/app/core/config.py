@@ -34,9 +34,9 @@ class Settings(BaseSettings):
     ALLOWED_VIDEO_TYPES: list[str] = ["video/mp4", "video/quicktime", "video/avi"]
 
     # CV Model
-    MODEL_ENABLED: bool = False
-    MODEL_WEIGHTS_PATH: str = ""
-    MODEL_CONFIDENCE_THRESHOLD: float = 0.4
+    MODEL_ENABLED: bool = True
+    MODEL_WEIGHTS_PATH: str = "ml/weights/rdd2022_yolov8n.pt"
+    MODEL_CONFIDENCE_THRESHOLD: float = 0.35
     MODEL_DEVICE: str = "cpu"
 
     # CORS

@@ -51,6 +51,9 @@ export default function ReportDetailPage() {
     similarity_score: number;
     same_damage_type: boolean;
     time_diff_days: number;
+    distinction_category?: string;
+    recommendation?: string;
+    reasoning?: string;
   }
 
   const { data: duplicates, isFetching: dupesFetching } = useQuery<DuplicateCandidate[]>({
@@ -242,30 +245,78 @@ export default function ReportDetailPage() {
           {(report.ai_confidence !== null || report.ai_damage_type) && (
             <Card>
               <CardHeader>
-                <CardTitle>AI assessment</CardTitle>
-                <span className="text-xs text-amber-600 flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3" /> Estimated — not verified
-                </span>
-              </CardHeader>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-gray-500">Detected type</p>
-                  <p className="font-medium text-gray-900 capitalize">{report.ai_damage_type ?? '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Confidence</p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-gray-200 rounded-full">
-                      <div
-                        className="h-1.5 bg-accent rounded-full"
-                        style={{ width: `${Math.round((report.ai_confidence ?? 0) * 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700">
-                      {Math.round((report.ai_confidence ?? 0) * 100)}%
+                <CardTitle>Computer Vision Assessment</CardTitle>
+                <div className="flex items-center gap-2">
+                  {report.ai_inference_ms && (
+                    <span className="text-[11px] text-gray-500 font-mono bg-gray-100 px-1.5 py-0.5 rounded">
+                      {Math.round(report.ai_inference_ms)}ms
                     </span>
+                  )}
+                  <span className="text-xs text-amber-600 flex items-center gap-1 font-medium">
+                    <AlertTriangle className="w-3 h-3" /> Provisional
+                  </span>
+                </div>
+              </CardHeader>
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-gray-500">Detected distress</p>
+                    <p className="font-medium text-gray-900 capitalize">{report.ai_damage_type ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Model confidence</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex-1 h-1.5 bg-gray-200 rounded-full">
+                        <div
+                          className="h-1.5 bg-accent rounded-full"
+                          style={{ width: `${Math.round((report.ai_confidence ?? 0) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-mono font-medium text-gray-700">
+                        {Math.round((report.ai_confidence ?? 0) * 100)}%
+                      </span>
+                    </div>
                   </div>
                 </div>
+
+                {/* Severity Estimation Details */}
+                {report.ai_bounding_boxes?.severity_estimation && (
+                  <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-md text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-gray-800">
+                        Severity Estimate:{' '}
+                        <span className="text-accent uppercase font-bold">
+                          {report.ai_bounding_boxes.severity_estimation.level}
+                        </span>{' '}
+                        ({report.ai_bounding_boxes.severity_estimation.score}/10)
+                      </span>
+                      {report.ai_bounding_boxes.severity_estimation.review_required && (
+                        <span className="text-[10px] bg-amber-100 text-amber-800 font-medium px-1.5 py-0.5 rounded">
+                          Review Required
+                        </span>
+                      )}
+                    </div>
+                    {report.ai_bounding_boxes.severity_estimation.features && (
+                      <div className="grid grid-cols-2 gap-2 text-gray-600 text-[11px] pt-1">
+                        <div>
+                          Footprint area:{' '}
+                          <span className="font-mono font-medium text-gray-900">
+                            {report.ai_bounding_boxes.severity_estimation.features.visible_area_percent}%
+                          </span>
+                        </div>
+                        <div>
+                          Elongation:{' '}
+                          <span className="font-mono font-medium text-gray-900">
+                            {report.ai_bounding_boxes.severity_estimation.features.max_aspect_ratio}x
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-gray-400 italic pt-1 border-t border-gray-200">
+                      Method: 2D visible area & distress geometry. True structural cavity depth cannot be determined from optical imagery.
+                    </p>
+                  </div>
+                )}
               </div>
             </Card>
           )}
@@ -538,22 +589,45 @@ export default function ReportDetailPage() {
                 ) : (
                   <ul className="space-y-2">
                     {duplicates.map((d) => (
-                      <li key={d.id} className="p-2 bg-gray-50 rounded-md text-xs space-y-1">
+                      <li key={d.id} className="p-2.5 bg-gray-50 border border-gray-200 rounded-md text-xs space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="font-mono font-semibold text-gray-800">{d.public_ref}</span>
-                          <span className="text-gray-500">{Math.round(d.similarity_score * 100)}% match</span>
+                          <span className="font-mono font-semibold text-gray-900">{d.public_ref}</span>
+                          <span className="font-mono font-medium text-accent">{Math.round(d.similarity_score * 100)}% match</span>
                         </div>
-                        <div className="text-gray-500 space-x-3">
+                        {d.distinction_category && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                              {d.distinction_category.replace(/_/g, ' ')}
+                            </span>
+                            {d.recommendation && (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                d.recommendation === 'keep_separate'
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : d.recommendation === 'auto_link'
+                                  ? 'bg-green-50 text-green-700 border border-green-200'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {d.recommendation.replace(/_/g, ' ')}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        <div className="text-gray-500 space-x-3 text-[11px]">
                           {d.distance_meters !== null && <span>{Math.round(d.distance_meters)}m away</span>}
                           <span>{d.time_diff_days.toFixed(0)}d apart</span>
-                          {d.same_damage_type && <span>Same type</span>}
+                          {d.same_damage_type && <span className="text-gray-700">Same damage type</span>}
                         </div>
+                        {d.reasoning && (
+                          <p className="text-[11px] text-gray-600 italic">
+                            {d.reasoning}
+                          </p>
+                        )}
                         <Button
                           size="sm"
                           variant="ghost"
                           loading={linkDupeMutation.isPending}
                           onClick={() => linkDupeMutation.mutate(d.id)}
-                          className="!text-xs !py-0.5 mt-1"
+                          className="!text-xs !py-0.5 mt-1 border border-gray-200"
                         >
                           <Link2 className="w-3 h-3 mr-1" />
                           Mark as duplicate
