@@ -386,6 +386,24 @@ async def submit_additional_evidence(
     return {"status": "ok", "message": "Additional evidence attached successfully"}
 
 
+# ─── Citizen: list my own reports ─────────────────────────────────────────────
+
+@router.get("/my", response_model=list[ReportListItem])
+async def list_my_reports(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Allows authenticated citizens to view their own submitted reports."""
+    q = select(Report).where(
+        or_(
+            Report.submitter_id == current_user.id,
+            Report.submitter_email == current_user.email,
+        )
+    ).order_by(Report.created_at.desc())
+    rows = (await db.execute(q)).scalars().all()
+    return [ReportListItem.model_validate(r) for r in rows]
+
+
 # ─── Coordinator: list reports ────────────────────────────────────────────────
 
 @router.get("", response_model=ReportListResponse)

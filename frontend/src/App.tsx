@@ -16,6 +16,8 @@ import TeamsPage from './pages/TeamsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import NotificationsPage from './pages/NotificationsPage';
 import InspectionsPage from './pages/InspectionsPage';
+import RegisterPage from './pages/RegisterPage';
+import MyReportsPage from './pages/MyReportsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,7 +66,9 @@ function App() {
             <Route path="/report" element={<ReportPage />} />
             <Route path="/track" element={<TrackPage />} />
             <Route path="/track/:ref" element={<TrackPage />} />
+            <Route path="/my-reports" element={<MyReportsPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
             {/* Coordinator */}
             <Route path="/coordinator/*" element={<CoordinatorRoutes />} />
             <Route path="*" element={<Navigate to="/report" replace />} />

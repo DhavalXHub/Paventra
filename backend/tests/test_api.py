@@ -251,3 +251,32 @@ async def test_method_b_inspection_creation_and_listing():
         assert list_res.status_code == 200
         jobs = list_res.json()
         assert any(j["id"] == job_id for j in jobs)
+
+
+@pytest.mark.asyncio
+async def test_citizen_my_reports_endpoint():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncSessionLocal() as db:
+            cit_res = await db.execute(select(User).where(User.email == "test_citizen@paventra.local"))
+            citizen = cit_res.scalar_one()
+            cit_token = create_access_token(citizen.id)
+
+            rpt = Report(
+                public_ref=f"PAV-{uuid.uuid4().hex[:8].upper()}",
+                source=ReportSource.CITIZEN,
+                status=ReportStatus.SUBMITTED,
+                damage_type=DamageType.POTHOLE,
+                submitter_id=citizen.id,
+                submitter_email=citizen.email,
+            )
+            db.add(rpt)
+            await db.commit()
+            await db.refresh(rpt)
+            ref = rpt.public_ref
+
+        headers = {"Authorization": f"Bearer {cit_token}"}
+        res = await client.get("/api/v1/reports/my", headers=headers)
+        assert res.status_code == 200
+        my_reports = res.json()
+        assert any(r["public_ref"] == ref for r in my_reports)

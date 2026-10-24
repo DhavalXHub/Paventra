@@ -1,10 +1,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Camera, Upload, MapPin, CheckCircle2, ArrowLeft, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Camera, Upload, MapPin, CheckCircle2, ArrowLeft, AlertTriangle, Loader2, RefreshCw, User } from 'lucide-react';
 import { LocationPickerMap } from '../components/Map';
 import { Button } from '../components/Button';
 import { Input, Textarea, Select } from '../components/FormElements';
 import { Alert, Skeleton } from '../components/Feedback';
 import { DAMAGE_TYPE_OPTIONS } from '../lib/constants';
+import { useAuth } from '../features/auth/AuthContext';
 import api from '../lib/api';
 import type { SubmitConfirmation } from '../types';
 
@@ -24,6 +26,7 @@ interface FormState {
 }
 
 export default function ReportPage() {
+  const { user, isAuthenticated } = useAuth();
   const [step, setStep] = useState<Step>('photo');
   const [form, setForm] = useState<FormState>({
     image: null,
@@ -35,7 +38,7 @@ export default function ReportPage() {
     location_source: 'unknown',
     location_accuracy: null,
     address_hint: '',
-    submitter_email: '',
+    submitter_email: user?.email ?? '',
   });
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
@@ -176,7 +179,21 @@ export default function ReportPage() {
           <span className="font-semibold text-gray-900 text-sm">Paventra</span>
         </div>
         <div className="flex-1" />
-        <a href="/track" className="text-xs text-gray-500 hover:text-gray-700">Track report</a>
+        <div className="flex items-center gap-3 text-xs">
+          <Link to="/track" className="text-gray-600 hover:text-gray-900">
+            Track report
+          </Link>
+          {isAuthenticated ? (
+            <Link to="/my-reports" className="text-accent font-medium hover:underline flex items-center gap-1">
+              <User className="w-3 h-3" />
+              My reports
+            </Link>
+          ) : (
+            <Link to="/login" className="text-accent font-medium hover:underline">
+              Sign in
+            </Link>
+          )}
+        </div>
       </header>
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-5">

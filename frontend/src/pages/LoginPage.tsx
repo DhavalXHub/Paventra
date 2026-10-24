@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { MapPin } from 'lucide-react';
 import { useAuth } from '../features/auth/AuthContext';
 import { Button } from '../components/Button';
@@ -20,7 +20,12 @@ export default function LoginPage() {
     setError(null);
     try {
       await login(email, password);
-      navigate('/coordinator');
+      const role = localStorage.getItem('user_role');
+      if (role === 'citizen') {
+        navigate('/my-reports');
+      } else {
+        navigate('/coordinator');
+      }
     } catch {
       setError('Invalid email or password.');
     } finally {
@@ -66,10 +71,18 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-gray-500">
-          Citizens:{' '}
-          <a href="/report" className="text-accent hover:underline">Submit a road damage report</a>
-        </p>
+        <div className="text-center text-xs text-gray-500 space-y-1">
+          <p>
+            Citizens:{' '}
+            <Link to="/register" className="text-accent font-medium hover:underline">
+              Create an account
+            </Link>{' '}
+            or{' '}
+            <Link to="/report" className="text-accent hover:underline">
+              Submit without an account
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
