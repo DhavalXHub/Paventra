@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: paventra_postgis
+    environment:
+      POSTGRES_USER: paventra
+      POSTGRES_PASSWORD: paventra_secure_dev_password
+      POSTGRES_DB: paventra
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paventra -d paventra"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgis_data:

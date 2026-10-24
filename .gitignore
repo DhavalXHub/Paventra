@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.db
+*.sqlite3
+
+# Uploads & temporary artifacts
+backend/uploads/reports/*
+backend/uploads/completions/*
+backend/uploads/inspections/*
+!backend/uploads/*/.gitkeep
+backend/.env
+
+# Node
+node_modules/
+dist/
+.npm
+.eslintcache
+
+# Testing & cache
+.pytest_cache/
+.coverage
+htmlcov/
+.tmp/
