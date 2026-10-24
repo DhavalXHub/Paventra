@@ -147,6 +147,14 @@ export default function ReportPage() {
               <p className="text-xs text-blue-600 italic">{String(result.ai_assessment['disclaimer'] ?? '')}</p>
             </div>
           )}
+          {result.ai_assessment && !result.ai_assessment['model_available'] && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-left space-y-0.5">
+              <p className="text-xs font-semibold text-gray-700">Manual Field Review Path</p>
+              <p className="text-xs text-gray-500">
+                {String(result.ai_assessment['message'] ?? 'Automated inference offline. A coordinator will manually review the photograph and coordinates.')}
+              </p>
+            </div>
+          )}
           <div className="flex gap-3 pt-2">
             <a
               href={`/track/${result.public_ref}`}

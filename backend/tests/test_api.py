@@ -360,3 +360,60 @@ async def test_repair_team_workflow():
         )
         assert comp_res.status_code == 200
         assert comp_res.json()["status"] == "pending_verification"
+
+
+@pytest.mark.asyncio
+async def test_verified_severity_and_analytics_serialization():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncSessionLocal() as db:
+            coord_res = await db.execute(select(User).where(User.email == "test_coord@paventra.local"))
+            coord = coord_res.scalar_one()
+            coord_token = create_access_token(coord.id)
+
+            rpt = Report(
+                public_ref=f"PAV-{uuid.uuid4().hex[:8].upper()}",
+                source=ReportSource.CITIZEN,
+                status=ReportStatus.UNDER_REVIEW,
+                damage_type=DamageType.POTHOLE,
+                latitude=19.0760,
+                longitude=72.8777,
+            )
+            db.add(rpt)
+            await db.commit()
+            await db.refresh(rpt)
+            rep_id = rpt.id
+
+        headers = {"Authorization": f"Bearer {coord_token}"}
+
+        # Verify with explicit field severity
+        v_res = await client.patch(
+            f"/api/v1/reports/{rep_id}/status",
+            json={"status": "verified", "severity": "high", "notes": "Confirmed large crater"},
+            headers=headers,
+        )
+        assert v_res.status_code == 200
+
+        # Check detail reflects verified severity and priority
+        detail_res = await client.get(f"/api/v1/reports/{rep_id}", headers=headers)
+        assert detail_res.status_code == 200
+        detail = detail_res.json()
+        assert detail["severity"] == "high"
+        assert detail["severity_is_estimated"] is False
+        assert detail["priority_score"] is not None
+
+        # Verify analytics serialization does NOT contain class reprs like "ReportStatus."
+        summary_res = await client.get("/api/v1/analytics/summary", headers=headers)
+        assert summary_res.status_code == 200
+        summary = summary_res.json()
+        for k in summary["by_status"].keys():
+            assert not k.startswith("ReportStatus.")
+        for k in summary["by_source"].keys():
+            assert not k.startswith("ReportSource.")
+
+        # Verify map markers serialization does NOT contain class reprs
+        map_res = await client.get("/api/v1/reports/map/markers", headers=headers)
+        assert map_res.status_code == 200
+        markers = map_res.json()
+        for m in markers:
+            assert not m["status"].startswith("ReportStatus.")

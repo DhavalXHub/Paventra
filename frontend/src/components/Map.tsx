@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents, ZoomControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { MapMarker } from '../types';
@@ -37,6 +37,16 @@ function LocationPicker({ onPick }: { onPick: (lat: number, lng: number) => void
       onPick(e.latlng.lat, e.latlng.lng);
     },
   });
+  return null;
+}
+
+function RecenterMap({ lat, lng }: { lat: number | null; lng: number | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (lat && lng) {
+      map.setView([lat, lng], 15);
+    }
+  }, [lat, lng, map]);
   return null;
 }
 
@@ -82,6 +92,12 @@ export function ReportMap({ markers, height = '400px' }: ReportMapProps) {
                 <p className="text-gray-500">Priority: {m.priority_score.toFixed(0)}/100</p>
               )}
               <p className="text-gray-400">{formatRelative(m.created_at)}</p>
+              <a
+                href={`/coordinator/reports/${m.id}`}
+                className="text-accent font-medium hover:underline block pt-1 border-t border-gray-100"
+              >
+                Open report &rarr;
+              </a>
             </div>
           </Popup>
         </Marker>
@@ -116,6 +132,7 @@ export function LocationPickerMap({ lat, lng, onPick, height = '260px' }: Locati
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <LocationPicker onPick={onPick} />
+        <RecenterMap lat={lat} lng={lng} />
         {lat && lng && (
           <Marker position={[lat, lng]} icon={createColoredIcon('#16a34a')}>
             <Popup>

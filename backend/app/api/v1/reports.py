@@ -514,6 +514,30 @@ async def update_status(
     if new_status == ReportStatus.RESOLVED:
         report.resolved_at = datetime.now(timezone.utc)
 
+    if body.severity:
+        try:
+            report.severity = SeverityLevel(body.severity)
+            report.severity_is_estimated = False
+            created = report.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            days_unresolved = max(
+                0.0,
+                (datetime.now(timezone.utc) - created).total_seconds() / 86400.0,
+            )
+            pr = compute_priority(
+                severity_label=report.severity.value,
+                time_unresolved_days=days_unresolved,
+            )
+            report.priority_score = pr.priority_score
+            report.priority_explanation = {
+                "label": pr.priority_label,
+                "factors": pr.top_contributing_factors,
+                "engine": pr.engine_used,
+            }
+        except Exception as exc:
+            logger.warning(f"Failed to update verified severity: {exc}")
+
     history = ReportStatusHistory(
         report_id=report.id,
         from_status=old_status.value,
@@ -566,8 +590,8 @@ async def assign_report(
     report = result.scalar_one_or_none()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    if report.status != ReportStatus.VERIFIED:
-        raise HTTPException(status_code=400, detail="Only VERIFIED reports can be assigned")
+    if report.status not in (ReportStatus.VERIFIED, ReportStatus.ASSIGNED):
+        raise HTTPException(status_code=400, detail="Only VERIFIED or ASSIGNED reports can be assigned")
 
     team_result = await db.execute(select(RepairTeam).where(RepairTeam.id == body.team_id, RepairTeam.is_active == True))  # noqa: E712
     team = team_result.scalar_one_or_none()
@@ -638,9 +662,9 @@ async def get_map_markers(
         {
             "id": r.id,
             "public_ref": r.public_ref,
-            "status": str(r.status),
-            "severity": str(r.severity) if r.severity else None,
-            "damage_type": str(r.damage_type),
+            "status": r.status.value if hasattr(r.status, "value") else str(r.status),
+            "severity": r.severity.value if hasattr(r.severity, "value") else (str(r.severity) if r.severity else None),
+            "damage_type": r.damage_type.value if hasattr(r.damage_type, "value") else str(r.damage_type),
             "lat": r.latitude,
             "lon": r.longitude,
             "priority_score": r.priority_score,

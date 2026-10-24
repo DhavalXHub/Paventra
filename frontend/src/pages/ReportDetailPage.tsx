@@ -16,6 +16,7 @@ export default function ReportDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [actionStatus, setActionStatus] = useState('');
+  const [verifiedSeverity, setVerifiedSeverity] = useState('');
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [teamId, setTeamId] = useState('');
@@ -91,13 +92,14 @@ export default function ReportDetailPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ status, reason, notes }: { status: string; reason?: string; notes?: string }) =>
-      api.patch(`/reports/${id}/status`, { status, reason, notes }),
+    mutationFn: ({ status, severity, reason, notes }: { status: string; severity?: string; reason?: string; notes?: string }) =>
+      api.patch(`/reports/${id}/status`, { status, severity, reason, notes }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['report', id] });
       qc.invalidateQueries({ queryKey: ['reports'] });
       setActionSuccess('Status updated successfully');
       setActionStatus('');
+      setVerifiedSeverity('');
       setReason('');
       setNotes('');
     },
@@ -361,6 +363,19 @@ export default function ReportDetailPage() {
                   ]}
                   onChange={(e) => { setActionStatus(e.target.value); setActionError(null); setActionSuccess(null); }}
                 />
+                {actionStatus === 'verified' && (
+                  <Select
+                    label="Confirm verified severity"
+                    value={verifiedSeverity || (report.severity ?? 'moderate')}
+                    options={[
+                      { value: 'low', label: 'Low — minor defect' },
+                      { value: 'moderate', label: 'Moderate — standard repair' },
+                      { value: 'high', label: 'High — safety concern' },
+                      { value: 'critical', label: 'Critical — immediate hazard' },
+                    ]}
+                    onChange={(e) => setVerifiedSeverity(e.target.value)}
+                  />
+                )}
                 {actionStatus === 'rejected' && (
                   <Textarea
                     label="Rejection reason *"
@@ -381,7 +396,12 @@ export default function ReportDetailPage() {
                   className="w-full"
                   disabled={!actionStatus || (actionStatus === 'rejected' && !reason)}
                   loading={statusMutation.isPending}
-                  onClick={() => statusMutation.mutate({ status: actionStatus, reason, notes })}
+                  onClick={() => statusMutation.mutate({
+                    status: actionStatus,
+                    severity: actionStatus === 'verified' ? (verifiedSeverity || report.severity || 'moderate') : undefined,
+                    reason,
+                    notes,
+                  })}
                 >
                   Apply
                 </Button>

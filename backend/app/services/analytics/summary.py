@@ -15,20 +15,25 @@ async def get_summary_stats(db: AsyncSession) -> dict[str, Any]:
     total_q = await db.execute(select(func.count(Report.id)))
     total = total_q.scalar() or 0
 
+    def _val(x: Any) -> str:
+        if x is None:
+            return "unknown"
+        return x.value if hasattr(x, "value") else str(x)
+
     status_q = await db.execute(
         select(Report.status, func.count(Report.id)).group_by(Report.status)
     )
-    by_status = {str(row[0]): row[1] for row in status_q.all()}
+    by_status = {_val(row[0]): row[1] for row in status_q.all()}
 
     source_q = await db.execute(
         select(Report.source, func.count(Report.id)).group_by(Report.source)
     )
-    by_source = {str(row[0]): row[1] for row in source_q.all()}
+    by_source = {_val(row[0]): row[1] for row in source_q.all()}
 
     sev_q = await db.execute(
         select(Report.severity, func.count(Report.id)).group_by(Report.severity)
     )
-    by_severity = {str(row[0]): row[1] for row in sev_q.all()}
+    by_severity = {_val(row[0]): row[1] for row in sev_q.all()}
 
     week_ago = datetime.now(timezone.utc) - timedelta(days=7)
     recent_q = await db.execute(

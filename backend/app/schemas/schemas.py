@@ -167,6 +167,7 @@ class ReportListResponse(BaseModel):
 
 class StatusUpdateRequest(BaseModel):
     status: str
+    severity: Optional[str] = None
     reason: Optional[str] = None
     notes: Optional[str] = None
 
