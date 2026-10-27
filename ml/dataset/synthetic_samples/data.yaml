@@ -1,0 +1,12 @@
+# Paventra YOLOv8 Road Damage Detection Dataset Configuration
+# RDD2022 (India subset)
+path: D:/Paventra/ml/dataset/synthetic_samples
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: D00  # Longitudinal Crack
+  1: D10  # Transverse Crack
+  2: D20  # Alligator Crack
+  3: D40  # Pothole

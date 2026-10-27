@@ -17,7 +17,7 @@
       "records": [
         {
           "filename": "India_000001.jpg",
-          "sha256": "a036fa385f6c40fa54c20fca52456a63eff9f96d7c44156d7c46a3c0aeaa20db",
+          "sha256": "f97d3073743828cc53dc183797babd252e114de013ec9c16b85a0857e24fa527",
           "width": 600,
           "height": 600,
           "box_count": 2,
@@ -28,7 +28,7 @@
         },
         {
           "filename": "India_000002.jpg",
-          "sha256": "ef151bc0201808cc681cd0287eca90d21838f5e157411f86889a00b06435fc8f",
+          "sha256": "fb7ba0eaade8cd8192671933fe78a2bd9537d4045168a65359a965155770bf8e",
           "width": 600,
           "height": 600,
           "box_count": 1,
@@ -38,18 +38,18 @@
         },
         {
           "filename": "India_000003.jpg",
-          "sha256": "4ab10f987814011bafacfe876490a21b4a18dde7064f7f30775629d702b3d950",
+          "sha256": "48633a068c922ab794b257918ad8378e054d2f689ca7c35666a7c1ff31df2bdc",
           "width": 600,
           "height": 600,
           "box_count": 2,
           "classes": [
-            "D40",
-            "D10"
+            "D10",
+            "D40"
           ]
         },
         {
           "filename": "India_000004.jpg",
-          "sha256": "2588c35658fef323bd531bb8a1b85fb47ee3b4439a7cea7cecbf853eb8da85fb",
+          "sha256": "5020d7800917bbd5ec9c8803136845e1a1146d7aa710ee3c03b7ec243bef4820",
           "width": 600,
           "height": 600,
           "box_count": 1,
@@ -59,18 +59,18 @@
         },
         {
           "filename": "India_000005.jpg",
-          "sha256": "464ab78ffb66b9fb4e2569dbd4f4efc861d387f41d136fa686038170f7500dfa",
+          "sha256": "17949594e327f7c1ef9ab2cb59a4c686abb8ae2a8e488cfce5c657dacc5449b7",
           "width": 600,
           "height": 600,
           "box_count": 2,
           "classes": [
-            "D40",
-            "D20"
+            "D20",
+            "D40"
           ]
         },
         {
           "filename": "India_000006.jpg",
-          "sha256": "40b4b27e8c90cdd5b4ab7776ce2934ee96f88316c4b95fc03b62ea2f9cb54a11",
+          "sha256": "4ee4bb41fc050a34cdfb3f5972b3ad4f8cabfc6b62b1fa6b949261163f0a13b9",
           "width": 600,
           "height": 600,
           "box_count": 1,
@@ -80,7 +80,7 @@
         },
         {
           "filename": "India_000007.jpg",
-          "sha256": "a2fb30afb22232fc19295d5f3f95d32aacd4067aa012f89d0ec72dbd98d17661",
+          "sha256": "38e9262996603d05cded96b33dd3f962d38a341ce489021828107d2d43bb0581",
           "width": 600,
           "height": 600,
           "box_count": 1,
@@ -90,7 +90,7 @@
         },
         {
           "filename": "India_000008.jpg",
-          "sha256": "7ae290f17fe5e6783f57887272c884aa88d2befa0c95e37c996dee515a254b3e",
+          "sha256": "b6f871d6ae458fb4e62d6a56e1e562e4cf697d9c2d1979083bf3f58060795c56",
           "width": 600,
           "height": 600,
           "box_count": 2,
@@ -101,7 +101,7 @@
         },
         {
           "filename": "India_000009.jpg",
-          "sha256": "544f7ff8b9d75bd596ab6ea34d75d886e8227f230cd5995b3faefebac62a6495",
+          "sha256": "d20e069f082336cb0224a38ab01541322f94df17a90c060d21d734bbcd8169d0",
           "width": 600,
           "height": 600,
           "box_count": 1,
@@ -111,7 +111,7 @@
         },
         {
           "filename": "India_000010.jpg",
-          "sha256": "de4090d392c84d079ee8da9d05edadb5624da3014dc8b32cebba67460e1cad4f",
+          "sha256": "a65e32c2ab3ce89f7719db96bf242e18302c5eeef812788ba714cf4fdb000d2c",
           "width": 600,
           "height": 600,
           "box_count": 2,

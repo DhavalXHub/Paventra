@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -90,6 +90,11 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     if settings.DEBUG:
         return JSONResponse(status_code=500, content={"detail": str(exc)})
     return JSONResponse(status_code=500, content={"detail": "An unexpected error occurred"})
+
+
+@app.get("/docs", include_in_schema=False)
+async def docs_redirect():
+    return RedirectResponse(url="/api/docs")
 
 
 @app.get("/api/health")

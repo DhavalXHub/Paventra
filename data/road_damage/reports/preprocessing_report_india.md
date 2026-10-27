@@ -22,5 +22,5 @@
 - **Test Set (15%):** 0 images
 
 ## 4. Configuration
-- **Ultralytics YOLO YAML:** `data/road_damage/processed/data.yaml`
+- **Ultralytics YOLO YAML:** `ml/dataset/synthetic_samples/data.yaml`
 - **Manifest:** `data/road_damage/splits/dataset_manifest_india.json`

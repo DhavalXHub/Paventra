@@ -110,7 +110,11 @@ def _baseline_score(inputs: FuzzyInputs) -> float:
 
 
 def _calculate_tri_membership(x: float, a: float, b: float, c: float) -> float:
-    """Evaluates triangular membership function at point x."""
+    """Evaluates triangular membership function at point x, supporting shoulder extensions."""
+    if a == b and x <= a:
+        return 1.0
+    if b == c and x >= c:
+        return 1.0
     if x <= a or x >= c:
         return 0.0
     if a < x <= b:
@@ -294,7 +298,7 @@ class FuzzyPriorityEngine:
         ]
 
         self._control_system = ctrl.ControlSystem(rules)
-        logger.info("Built Mamdani fuzzy priority control system with 22 complete rules.")
+        logger.info("Built Mamdani fuzzy priority control system with 23 complete rules.")
 
     def initialize(self) -> None:
         if self._initialized:

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { MapPin, User, Menu, X, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../features/auth/AuthContext';
 
-export function PublicHeader({ current }: { current?: 'home' | 'report' | 'track' | 'account' }) {
+export function PublicHeader({ current }: { current?: 'home' | 'report' | 'track' | 'account' | 'how-it-works' | 'road-intelligence' | 'lifecycle' }) {
   const { isAuthenticated, isCoordinator, isRepairTeam, user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
@@ -49,20 +49,32 @@ export function PublicHeader({ current }: { current?: 'home' | 'report' | 'track
               Home
             </Link>
             <Link
-              to="/#how-it-works"
-              className="text-stone-600 hover:text-stone-900 transition-colors"
+              to="/how-it-works"
+              className={`transition-colors ${
+                current === 'how-it-works' || location.pathname === '/how-it-works'
+                  ? 'text-[#14462a] font-semibold'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
             >
               How it works
             </Link>
             <Link
-              to="/#intelligence"
-              className="text-stone-600 hover:text-stone-900 transition-colors"
+              to="/road-intelligence"
+              className={`transition-colors ${
+                current === 'road-intelligence' || location.pathname === '/road-intelligence'
+                  ? 'text-[#14462a] font-semibold'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
             >
               Road intelligence
             </Link>
             <Link
-              to="/#lifecycle"
-              className="text-stone-600 hover:text-stone-900 transition-colors"
+              to="/lifecycle"
+              className={`transition-colors ${
+                current === 'lifecycle' || location.pathname === '/lifecycle'
+                  ? 'text-[#14462a] font-semibold'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
             >
               Lifecycle
             </Link>
@@ -180,23 +192,35 @@ export function PublicHeader({ current }: { current?: 'home' | 'report' | 'track
             Home
           </Link>
           <Link
-            to="/#how-it-works"
+            to="/how-it-works"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-sm font-medium text-stone-700 hover:text-[#14462a] py-1.5"
+            className={`block text-sm font-medium py-1.5 ${
+              location.pathname === '/how-it-works'
+                ? 'text-[#14462a] font-semibold'
+                : 'text-stone-700 hover:text-[#14462a]'
+            }`}
           >
             How it works
           </Link>
           <Link
-            to="/#intelligence"
+            to="/road-intelligence"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-sm font-medium text-stone-700 hover:text-[#14462a] py-1.5"
+            className={`block text-sm font-medium py-1.5 ${
+              location.pathname === '/road-intelligence'
+                ? 'text-[#14462a] font-semibold'
+                : 'text-stone-700 hover:text-[#14462a]'
+            }`}
           >
             Road intelligence
           </Link>
           <Link
-            to="/#lifecycle"
+            to="/lifecycle"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-sm font-medium text-stone-700 hover:text-[#14462a] py-1.5"
+            className={`block text-sm font-medium py-1.5 ${
+              location.pathname === '/lifecycle'
+                ? 'text-[#14462a] font-semibold'
+                : 'text-stone-700 hover:text-[#14462a]'
+            }`}
           >
             Repair lifecycle
           </Link>

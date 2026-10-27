@@ -21,6 +21,10 @@ import InspectionsPage from './pages/InspectionsPage';
 import RegisterPage from './pages/RegisterPage';
 import MyReportsPage from './pages/MyReportsPage';
 import TeamJobsPage from './pages/TeamJobsPage';
+import HowItWorksPage from './pages/HowItWorksPage';
+import RoadIntelligencePage from './pages/RoadIntelligencePage';
+import LifecyclePage from './pages/LifecyclePage';
+import NotFoundPage from './pages/NotFoundPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -90,9 +94,13 @@ function App() {
               <Route path="/team/jobs" element={<RequireTeam><TeamJobsPage /></RequireTeam>} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              {/* Informational public pages */}
+              <Route path="/how-it-works" element={<HowItWorksPage />} />
+              <Route path="/road-intelligence" element={<RoadIntelligencePage />} />
+              <Route path="/lifecycle" element={<LifecyclePage />} />
               {/* Coordinator */}
               <Route path="/coordinator/*" element={<CoordinatorRoutes />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>

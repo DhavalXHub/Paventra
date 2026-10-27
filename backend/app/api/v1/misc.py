@@ -367,7 +367,7 @@ async def get_fuzzy_system_metadata():
                 "critical": {"type": "trimf", "params": [85.0, 100.0, 100.0]},
             },
         },
-        "rules_count": 22,
+        "rules_count": 23,
         "rule_base": [
             "R01: IF severity IS critical AND safety IS high THEN priority IS critical",
             "R02: IF severity IS critical AND safety IS medium THEN priority IS critical",
@@ -391,6 +391,7 @@ async def get_fuzzy_system_metadata():
             "R20: IF severity IS low AND traffic IS medium THEN priority IS low",
             "R21: IF severity IS low AND traffic IS low THEN priority IS low",
             "R22: IF safety IS high AND traffic IS high THEN priority IS high",
+            "R23: IF time_days IS very_long AND traffic IS high THEN priority IS high",
         ],
     }
 

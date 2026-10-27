@@ -16,6 +16,6 @@
   },
   "validation_issues_count": 0,
   "validation_issues_sample": [],
-  "yolo_data_yaml": "D:\\Paventra\\data\\road_damage\\processed\\data.yaml",
+  "yolo_data_yaml": "D:\\Paventra\\ml\\dataset\\synthetic_samples\\data.yaml",
   "manifest_path": "D:\\Paventra\\data\\road_damage\\splits\\dataset_manifest_india.json"
 }

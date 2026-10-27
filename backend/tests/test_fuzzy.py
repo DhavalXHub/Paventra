@@ -128,3 +128,21 @@ def test_academic_narrative_explanation():
     assert "Mamdani Fuzzy Inference System" in res.explanation_narrative
     assert res.priority_label in ("HIGH", "CRITICAL")
 
+
+def test_endpoint_membership_activations():
+    """Verify that boundary endpoints (0.0, 10.0, 365.0) activate shoulder sets with degree 1.0."""
+    from app.services.prioritization.fuzzy_engine import evaluate_all_memberships
+
+    m_zero = evaluate_all_memberships(FuzzyInputs(severity=0.0, traffic_exposure=0.0, time_unresolved_days=0.0, safety_urgency=0.0))
+    assert m_zero["severity"]["low"] == 1.0
+    assert m_zero["traffic"]["low"] == 1.0
+    assert m_zero["time_days"]["short"] == 1.0
+    assert m_zero["safety"]["low"] == 1.0
+
+    m_max = evaluate_all_memberships(FuzzyInputs(severity=10.0, traffic_exposure=10.0, time_unresolved_days=365.0, safety_urgency=10.0))
+    assert m_max["severity"]["critical"] == 1.0
+    assert m_max["traffic"]["high"] == 1.0
+    assert m_max["time_days"]["very_long"] == 1.0
+    assert m_max["safety"]["high"] == 1.0
+
+
