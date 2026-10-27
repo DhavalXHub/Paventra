@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Search, MapPin, Upload, PlusCircle } from 'lucide-react';
+import { Search, Upload, PlusCircle } from 'lucide-react';
 import api from '../lib/api';
 import type { TrackResponse } from '../types';
 import { formatDate, formatDateTime } from '../lib/constants';
@@ -9,6 +9,7 @@ import { StatusBadge, SeverityBadge } from '../components/Badge';
 import { Input, Textarea } from '../components/FormElements';
 import { Button } from '../components/Button';
 import { Alert } from '../components/Feedback';
+import { PublicHeader } from '../components/PublicHeader';
 
 export default function TrackPage() {
   const { ref: paramRef } = useParams<{ ref?: string }>();
@@ -70,16 +71,7 @@ export default function TrackPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-2">
-        <div className="w-6 h-6 bg-accent rounded-md flex items-center justify-center">
-          <MapPin className="w-3.5 h-3.5 text-white" />
-        </div>
-        <span className="font-semibold text-gray-900 text-sm">Paventra</span>
-        <div className="flex-1" />
-        <Link to="/report" className="text-xs text-accent hover:underline font-medium">
-          New report
-        </Link>
-      </header>
+      <PublicHeader current="track" />
 
       <div className="max-w-xl mx-auto px-4 py-8 space-y-6">
         <div>
@@ -128,6 +120,18 @@ export default function TrackPage() {
                   <p className="text-gray-500">Reported</p>
                   <p className="text-gray-900">{formatDate(data.created_at)}</p>
                 </div>
+                <div>
+                  <p className="text-gray-500">Account status</p>
+                  <p className="text-gray-800 font-medium">
+                    {data.is_claimed ? 'Linked to citizen account' : 'Guest submission'}
+                  </p>
+                </div>
+                {data.address_hint && (
+                  <div className="col-span-2">
+                    <p className="text-gray-500">Vicinity</p>
+                    <p className="text-gray-900 font-medium">{data.address_hint}</p>
+                  </div>
+                )}
                 {data.resolved_at && (
                   <div>
                     <p className="text-gray-500">Resolved</p>

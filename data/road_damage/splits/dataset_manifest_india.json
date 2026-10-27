@@ -1,0 +1,134 @@
+{
+  "dataset_name": "RDD2022_India_YOLO",
+  "provenance": {
+    "source": "Road Damage Dataset 2022 (RDD2022)",
+    "citation": "Arya et al., IEEE Big Data 2022. Figshare DOI: 10.6084/m9.figshare.21431547.v1",
+    "country_subset": "India",
+    "classes": {
+      "D00": 0,
+      "D10": 1,
+      "D20": 2,
+      "D40": 3
+    }
+  },
+  "splits": {
+    "train": {
+      "count": 10,
+      "records": [
+        {
+          "filename": "India_000001.jpg",
+          "sha256": "a036fa385f6c40fa54c20fca52456a63eff9f96d7c44156d7c46a3c0aeaa20db",
+          "width": 600,
+          "height": 600,
+          "box_count": 2,
+          "classes": [
+            "D00",
+            "D40"
+          ]
+        },
+        {
+          "filename": "India_000002.jpg",
+          "sha256": "ef151bc0201808cc681cd0287eca90d21838f5e157411f86889a00b06435fc8f",
+          "width": 600,
+          "height": 600,
+          "box_count": 1,
+          "classes": [
+            "D20"
+          ]
+        },
+        {
+          "filename": "India_000003.jpg",
+          "sha256": "4ab10f987814011bafacfe876490a21b4a18dde7064f7f30775629d702b3d950",
+          "width": 600,
+          "height": 600,
+          "box_count": 2,
+          "classes": [
+            "D40",
+            "D10"
+          ]
+        },
+        {
+          "filename": "India_000004.jpg",
+          "sha256": "2588c35658fef323bd531bb8a1b85fb47ee3b4439a7cea7cecbf853eb8da85fb",
+          "width": 600,
+          "height": 600,
+          "box_count": 1,
+          "classes": [
+            "D00"
+          ]
+        },
+        {
+          "filename": "India_000005.jpg",
+          "sha256": "464ab78ffb66b9fb4e2569dbd4f4efc861d387f41d136fa686038170f7500dfa",
+          "width": 600,
+          "height": 600,
+          "box_count": 2,
+          "classes": [
+            "D40",
+            "D20"
+          ]
+        },
+        {
+          "filename": "India_000006.jpg",
+          "sha256": "40b4b27e8c90cdd5b4ab7776ce2934ee96f88316c4b95fc03b62ea2f9cb54a11",
+          "width": 600,
+          "height": 600,
+          "box_count": 1,
+          "classes": [
+            "D10"
+          ]
+        },
+        {
+          "filename": "India_000007.jpg",
+          "sha256": "a2fb30afb22232fc19295d5f3f95d32aacd4067aa012f89d0ec72dbd98d17661",
+          "width": 600,
+          "height": 600,
+          "box_count": 1,
+          "classes": [
+            "D40"
+          ]
+        },
+        {
+          "filename": "India_000008.jpg",
+          "sha256": "7ae290f17fe5e6783f57887272c884aa88d2befa0c95e37c996dee515a254b3e",
+          "width": 600,
+          "height": 600,
+          "box_count": 2,
+          "classes": [
+            "D00",
+            "D20"
+          ]
+        },
+        {
+          "filename": "India_000009.jpg",
+          "sha256": "544f7ff8b9d75bd596ab6ea34d75d886e8227f230cd5995b3faefebac62a6495",
+          "width": 600,
+          "height": 600,
+          "box_count": 1,
+          "classes": [
+            "D40"
+          ]
+        },
+        {
+          "filename": "India_000010.jpg",
+          "sha256": "de4090d392c84d079ee8da9d05edadb5624da3014dc8b32cebba67460e1cad4f",
+          "width": 600,
+          "height": 600,
+          "box_count": 2,
+          "classes": [
+            "D00",
+            "D10"
+          ]
+        }
+      ]
+    },
+    "val": {
+      "count": 0,
+      "records": []
+    },
+    "test": {
+      "count": 0,
+      "records": []
+    }
+  }
+}

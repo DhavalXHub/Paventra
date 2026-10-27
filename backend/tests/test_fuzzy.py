@@ -91,3 +91,40 @@ def test_time_unresolved_monotonic_increase():
 
     assert r_day30.priority_score >= r_day0.priority_score
     assert r_day180.priority_score >= r_day30.priority_score
+
+
+def test_complete_boundary_coverage():
+    """Verify that extreme boundary conditions compute without unhandled KeyError exceptions."""
+    boundaries = [
+        (0.0, 0.0, 0.0, 0.0),
+        (10.0, 10.0, 365.0, 10.0),
+        (5.0, 0.0, 0.0, 10.0),
+        (0.0, 10.0, 365.0, 0.0),
+        (10.0, 0.0, 0.0, 0.0),
+        (2.0, 8.0, 200.0, 2.0),
+        (8.5, 2.0, 5.0, 9.0),
+    ]
+    for s, t, d, u in boundaries:
+        res = compute_priority(
+            severity_numeric=s,
+            traffic_exposure=t,
+            time_unresolved_days=d,
+            safety_urgency=u,
+        )
+        assert 0.0 <= res.priority_score <= 100.0
+        assert res.engine_used == "fuzzy_mamdani"
+        assert res.membership_activations is not None
+        assert res.explanation_narrative is not None
+
+
+def test_academic_narrative_explanation():
+    """Verify that the fuzzy explainability narrative captures non-linear priority shifts."""
+    res = compute_priority(
+        severity_numeric=9.0,
+        traffic_exposure=9.0,
+        time_unresolved_days=60.0,
+        safety_urgency=9.5,
+    )
+    assert "Mamdani Fuzzy Inference System" in res.explanation_narrative
+    assert res.priority_label in ("HIGH", "CRITICAL")
+

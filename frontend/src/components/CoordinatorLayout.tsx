@@ -1,8 +1,9 @@
-import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import { MapPin, LayoutDashboard, FileText, Users, BarChart3, Bell, LogOut, Menu, X, Video } from 'lucide-react';
+import React, { useState } from 'react';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { MapPin, LayoutDashboard, FileText, Users, BarChart3, Bell, LogOut, Menu, Video, Home } from 'lucide-react';
 import { useAuth } from '../features/auth/AuthContext';
-import { useState } from 'react';
+import api from '../lib/api';
 
 const NAV_ITEMS = [
   { to: '/coordinator', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -17,6 +18,12 @@ export function CoordinatorLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { data: notifications } = useQuery<Array<{ is_read: boolean }>>({
+    queryKey: ['notifications'],
+    queryFn: () => api.get('/notifications').then((r) => r.data),
+    refetchInterval: 30000,
+  });
+  const unread = notifications?.filter((n) => !n.is_read).length ?? 0;
 
   function handleLogout() {
     logout();
@@ -32,12 +39,19 @@ export function CoordinatorLayout({ children }: { children: React.ReactNode }) {
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:static lg:flex`}
       >
         {/* Logo */}
-        <div className="flex items-center gap-2.5 px-5 h-14 border-b border-gray-100 flex-shrink-0">
+        <Link
+          to="/"
+          className="flex items-center gap-2.5 px-5 h-14 border-b border-gray-100 flex-shrink-0 group hover:bg-stone-50 transition-colors"
+          title="Return to Public Homepage"
+        >
           <div className="w-7 h-7 bg-accent rounded-md flex items-center justify-center">
             <MapPin className="w-4 h-4 text-white" />
           </div>
-          <span className="font-semibold text-gray-900 text-sm tracking-tight">Paventra</span>
-        </div>
+          <div className="flex flex-col">
+            <span className="font-semibold text-gray-900 text-sm tracking-tight">Paventra</span>
+            <span className="text-[10px] text-stone-500 font-normal">Coordinator Portal</span>
+          </div>
+        </Link>
 
         {/* Nav */}
         <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
@@ -59,6 +73,17 @@ export function CoordinatorLayout({ children }: { children: React.ReactNode }) {
               {label}
             </NavLink>
           ))}
+
+          <div className="pt-3 mt-3 border-t border-gray-100">
+            <Link
+              to="/"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition-colors"
+              onClick={() => setSidebarOpen(false)}
+            >
+              <Home className="w-4 h-4 flex-shrink-0 text-stone-500" />
+              <span>Public Homepage</span>
+            </Link>
+          </div>
         </nav>
 
         {/* User area */}
@@ -104,11 +129,25 @@ export function CoordinatorLayout({ children }: { children: React.ReactNode }) {
             <Menu className="w-5 h-5" />
           </button>
           <div className="flex-1" />
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-md border border-stone-200 transition-colors"
+            title="Return to public homepage"
+          >
+            <Home className="w-3.5 h-3.5 text-stone-500" />
+            <span className="hidden sm:inline">Public Home</span>
+          </Link>
           <NavLink
             to="/coordinator/notifications"
-            className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 transition-colors"
+            className="relative p-1.5 rounded-md hover:bg-gray-100 text-gray-500 transition-colors"
+            aria-label={unread ? `${unread} unread notifications` : 'Notifications'}
           >
             <Bell className="w-5 h-5" />
+            {unread > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[10px] leading-4 text-center">
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
           </NavLink>
         </header>
 

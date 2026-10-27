@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 import aiofiles
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status, BackgroundTasks
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
@@ -27,12 +27,15 @@ from app.models.audit import AuditEvent
 from app.schemas.schemas import (
     ReportOut, ReportListItem, ReportListResponse, StatusUpdateRequest,
     AssignRequest, SubmitConfirmation, CompletionRequest,
+    ReportClaimRequest, ReportClaimResponse,
 )
 from app.services.vision.inference import detector
 from app.services.prioritization.fuzzy_engine import compute_priority
 from app.services.notifications.service import create_notification
 from app.services.duplicate_detection.detector import find_duplicate_candidates as _find_dupes
 from app.services.geospatial.distance import validate_coordinates, haversine_distance
+from app.services.media.validation import enforce_upload_size, safe_upload_name, validate_image_bytes
+from app.core.rate_limiter import enforce_submission_rate_limit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -56,11 +59,7 @@ def _generate_ref() -> str:
 
 
 async def _safe_filename(original: str) -> str:
-    ext = Path(original).suffix.lower()
-    allowed = {".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov", ".avi"}
-    if ext not in allowed:
-        ext = ".jpg"
-    return f"{secrets.token_hex(16)}{ext}"
+    return safe_upload_name(original)
 
 
 async def _run_ai_inference(image_path: str, report: Report, db: AsyncSession) -> None:
@@ -129,6 +128,7 @@ async def _run_ai_inference(image_path: str, report: Report, db: AsyncSession) -
 
 @router.post("", response_model=SubmitConfirmation, status_code=201)
 async def submit_report(
+    request: Request,
     background_tasks: BackgroundTasks,
     image: UploadFile = File(...),
     description: Optional[str] = Form(None),
@@ -142,16 +142,24 @@ async def submit_report(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
+    # Enforce dual-key rate limiting (IP and account/email)
+    enforce_submission_rate_limit(
+        request=request,
+        submitter_email=submitter_email,
+        current_user_id=current_user.id if current_user else None,
+    )
     # Validate image
     content_type = image.content_type or ""
     if content_type not in settings.ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status_code=400, detail=f"Unsupported file type: {content_type}")
+        raise HTTPException(status_code=400, detail="Unsupported file type. Use JPEG, PNG or WebP.")
 
     content = await image.read()
-    if len(content) > settings.max_upload_bytes:
-        raise HTTPException(status_code=413, detail=f"File exceeds {settings.MAX_UPLOAD_SIZE_MB} MB limit")
+    enforce_upload_size(content)
+    validate_image_bytes(content)
 
-    # Validate coordinates
+    # Validate coordinates — never invent missing GPS
+    if (latitude is None) != (longitude is None):
+        raise HTTPException(status_code=400, detail="Latitude and longitude must be provided together")
     if latitude is not None or longitude is not None:
         if not validate_coordinates(latitude, longitude):
             raise HTTPException(status_code=400, detail="Invalid coordinates")
@@ -183,12 +191,16 @@ async def submit_report(
         if not existing.scalar_one_or_none():
             break
 
+    # If guest submission, generate single-use claim token
+    claim_token = secrets.token_urlsafe(32) if not current_user else None
+
     report = Report(
         public_ref=ref,
         source=ReportSource.CITIZEN,
         status=ReportStatus.SUBMITTED,
         submitter_id=current_user.id if current_user else None,
         submitter_email=submitter_email or (current_user.email if current_user else None),
+        claim_token=claim_token,
         description=description,
         damage_type=dt_enum,
         latitude=latitude,
@@ -345,6 +357,7 @@ async def submit_report(
         status=ReportStatus.SUBMITTED.value,
         ai_assessment=ai_assessment,
         message=f"Report {ref} submitted successfully. You can track its status using this reference.",
+        claim_token=claim_token,
     )
 
 
@@ -369,6 +382,10 @@ async def track_report(public_ref: str, db: AsyncSession = Depends(get_db)):
         "status": report.status.value,
         "damage_type": report.damage_type.value,
         "severity": report.severity.value if report.severity else None,
+        "latitude": report.latitude,
+        "longitude": report.longitude,
+        "address_hint": report.address_hint,
+        "is_claimed": report.submitter_id is not None,
         "created_at": report.created_at.isoformat(),
         "updated_at": report.updated_at.isoformat(),
         "resolved_at": report.resolved_at.isoformat() if report.resolved_at else None,
@@ -399,10 +416,10 @@ async def submit_additional_evidence(
     if image:
         content_type = image.content_type or ""
         if content_type not in settings.ALLOWED_IMAGE_TYPES:
-            raise HTTPException(status_code=400, detail=f"Unsupported file type: {content_type}")
+            raise HTTPException(status_code=400, detail="Unsupported file type. Use JPEG, PNG or WebP.")
         content = await image.read()
-        if len(content) > settings.max_upload_bytes:
-            raise HTTPException(status_code=413, detail="File exceeds maximum allowed upload size")
+        enforce_upload_size(content)
+        validate_image_bytes(content)
 
         upload_dir = Path(settings.UPLOAD_DIR) / "reports"
         upload_dir.mkdir(parents=True, exist_ok=True)
@@ -441,19 +458,91 @@ async def submit_additional_evidence(
 # ─── Citizen: list my own reports ─────────────────────────────────────────────
 
 @router.get("/my", response_model=list[ReportListItem])
+@router.get("/mine", response_model=list[ReportListItem])
 async def list_my_reports(
+    status: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Allows authenticated citizens to view their own submitted reports."""
-    q = select(Report).where(
-        or_(
-            Report.submitter_id == current_user.id,
-            Report.submitter_email == current_user.email,
-        )
-    ).order_by(Report.created_at.desc())
+    q = select(Report).where(Report.submitter_id == current_user.id)
+    if status:
+        q = q.where(Report.status == status)
+    q = q.order_by(Report.created_at.desc())
     rows = (await db.execute(q)).scalars().all()
     return [ReportListItem.model_validate(r) for r in rows]
+
+
+@router.post("/claim", response_model=ReportClaimResponse)
+async def claim_report(
+    request: Request,
+    body: ReportClaimRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Claim an unassigned/guest report to link it to the authenticated citizen account."""
+    # Rate-limit claims to prevent brute forcing
+    enforce_submission_rate_limit(request=request, current_user_id=current_user.id)
+
+    ref = body.public_ref.strip().upper()
+    result = await db.execute(select(Report).where(Report.public_ref == ref))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail=f"Report with reference '{ref}' not found")
+
+    if report.submitter_id is not None:
+        if report.submitter_id == current_user.id:
+            return ReportClaimResponse(
+                status="ok",
+                message="This report is already linked to your account.",
+                public_ref=report.public_ref,
+                claimed_at=datetime.now(timezone.utc),
+            )
+        raise HTTPException(
+            status_code=400,
+            detail="This report has already been linked to another account.",
+        )
+
+    # Verification check: either valid claim_token OR matching verification_email OR current user email matches guest email
+    verified = False
+    if body.claim_token and report.claim_token and secrets.compare_digest(body.claim_token.strip(), report.claim_token):
+        verified = True
+    elif body.verification_email and report.submitter_email and body.verification_email.strip().lower() == report.submitter_email.strip().lower():
+        verified = True
+    elif report.submitter_email and current_user.email.strip().lower() == report.submitter_email.strip().lower():
+        verified = True
+
+    if not verified:
+        raise HTTPException(
+            status_code=400,
+            detail="Verification failed. Please provide the single-use claim token or the email address submitted with the report.",
+        )
+
+    # Associate report to user and invalidate claim token (single-use)
+    report.submitter_id = current_user.id
+    report.claim_token = None
+
+    # Record audit event
+    audit = AuditEvent(
+        action="REPORT_CLAIMED",
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        resource_type="report",
+        resource_id=report.id,
+        details={
+            "public_ref": report.public_ref,
+            "claimed_by_email": current_user.email,
+        },
+    )
+    db.add(audit)
+    await db.commit()
+
+    return ReportClaimResponse(
+        status="ok",
+        message=f"Report {report.public_ref} has been successfully linked to your account.",
+        public_ref=report.public_ref,
+        claimed_at=datetime.now(timezone.utc),
+    )
 
 
 # ─── Coordinator: list reports ────────────────────────────────────────────────
@@ -867,6 +956,9 @@ async def submit_completion(
             detail=f"Cannot submit completion for report in status: {report.status.value}"
         )
 
+    if photo is None:
+        raise HTTPException(status_code=400, detail="After-repair photograph is required")
+
     photo_path = None
     if photo:
         content_type = photo.content_type or ""
@@ -874,8 +966,8 @@ async def submit_completion(
         if content_type not in allowed_types:
             raise HTTPException(status_code=400, detail="Unsupported completion photo type")
         content = await photo.read()
-        if len(content) > settings.max_upload_bytes:
-            raise HTTPException(status_code=413, detail="File too large")
+        enforce_upload_size(content)
+        validate_image_bytes(content)
         upload_dir = Path(settings.UPLOAD_DIR) / "completions"
         upload_dir.mkdir(parents=True, exist_ok=True)
         safe_name = await _safe_filename(photo.filename or "completion.jpg")

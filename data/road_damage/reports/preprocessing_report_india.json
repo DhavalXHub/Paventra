@@ -1,0 +1,21 @@
+{
+  "dataset_name": "RDD2022_India",
+  "total_xml_annotations_scanned": 10,
+  "valid_image_annotation_pairs": 10,
+  "total_bounding_boxes": 15,
+  "class_distribution": {
+    "D00": 4,
+    "D10": 3,
+    "D20": 3,
+    "D40": 5
+  },
+  "split_counts": {
+    "train": 10,
+    "val": 0,
+    "test": 0
+  },
+  "validation_issues_count": 0,
+  "validation_issues_sample": [],
+  "yolo_data_yaml": "D:\\Paventra\\data\\road_damage\\processed\\data.yaml",
+  "manifest_path": "D:\\Paventra\\data\\road_damage\\splits\\dataset_manifest_india.json"
+}

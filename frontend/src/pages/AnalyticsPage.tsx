@@ -9,6 +9,7 @@ import type { AnalyticsSummary, TrendPoint } from '../types';
 import { Card, CardHeader, CardTitle } from '../components/Card';
 import { Skeleton } from '../components/Feedback';
 import { STATUS_LABELS } from '../lib/constants';
+import { SoftComputingInspector } from '../components/SoftComputingInspector';
 
 const SEV_COLORS: Record<string, string> = {
   low: '#22c55e', moderate: '#f59e0b', high: '#f97316', critical: '#ef4444', None: '#9ca3af'
@@ -35,6 +36,7 @@ export default function AnalyticsPage() {
     queryKey: ['analytics-batch'],
     queryFn: () => api.get('/analytics/batch').then((r) => r.data),
     staleTime: 60000,
+    retry: false,
   });
 
   if (isLoading) return <Skeleton className="m-6 h-96" />;
@@ -138,6 +140,9 @@ export default function AnalyticsPage() {
         </div>
       </Card>
 
+      {/* Central Academic Module: Soft Computing & Mamdani Fuzzy Inference */}
+      <SoftComputingInspector />
+
       {/* Big Data Batch Analytics & Hotspot Clustering */}
       {batchAnalytics && (
         <Card>
@@ -145,7 +150,8 @@ export default function AnalyticsPage() {
             <div>
               <CardTitle>Batch Hotspot Clustering & Parity Analytics</CardTitle>
               <p className="text-xs text-gray-500 mt-0.5">
-                Aggregated spatial clusters (0.01° grid) & turnaround performance across {batchAnalytics.input_records_count ?? 150} reports
+                Offline batch job export ({batchAnalytics.input_records_count ?? 0} records). Not a live dashboard count.
+                {batchAnalytics.data_origin_note ? ` ${batchAnalytics.data_origin_note}` : ''}
               </p>
             </div>
             <div className="flex items-center gap-2">

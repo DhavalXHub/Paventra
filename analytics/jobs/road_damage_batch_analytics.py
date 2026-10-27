@@ -160,7 +160,7 @@ def run_reference_analytics(df: pd.DataFrame) -> Dict[str, Any]:
     cat_sev_matrix = df.groupby(["damage_type", "severity"]).size().unstack(fill_value=0).to_dict(orient="index")
 
     # 3. Monthly volume trend
-    df["month_period"] = pd.to_datetime(df["created_at"]).dt.strftime("%Y-%m")
+    df["month_period"] = pd.to_datetime(df["created_at"], utc=True).dt.strftime("%Y-%m")
     monthly_trend = df.groupby("month_period").size().to_dict()
 
     # 4. Source distribution: citizen vs inspection
@@ -170,8 +170,8 @@ def run_reference_analytics(df: pd.DataFrame) -> Dict[str, Any]:
     status_counts = df["status"].value_counts().to_dict()
 
     # 6. Overdue count (unresolved for > 30 days)
-    ref_now = pd.to_datetime("2026-04-01T00:00:00Z")
-    created_dts = pd.to_datetime(df["created_at"])
+    ref_now = pd.Timestamp.now(tz="UTC")
+    created_dts = pd.to_datetime(df["created_at"], utc=True)
     unresolved_mask = df["status"] != "resolved"
     age_days = (ref_now - created_dts).dt.total_seconds() / 86400.0
     overdue_count = int(((age_days > 30) & unresolved_mask).sum())
@@ -179,8 +179,8 @@ def run_reference_analytics(df: pd.DataFrame) -> Dict[str, Any]:
     # 7. Average repair duration for resolved cases
     resolved_df = df[df["status"] == "resolved"].copy()
     if not resolved_df.empty:
-        t_res = pd.to_datetime(resolved_df["resolved_at"])
-        t_cre = pd.to_datetime(resolved_df["created_at"])
+        t_res = pd.to_datetime(resolved_df["resolved_at"], utc=True)
+        t_cre = pd.to_datetime(resolved_df["created_at"], utc=True)
         durations = (t_res - t_cre).dt.total_seconds() / 86400.0
         avg_repair_days = float(durations.mean())
     else:

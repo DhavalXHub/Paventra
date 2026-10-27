@@ -1,5 +1,4 @@
 """Inspection API endpoints for Method B automated inspections."""
-import shutil
 from pathlib import Path
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
@@ -13,6 +12,7 @@ from app.models.user import User
 from app.models.inspection import InspectionJob, InspectionFrame, InspectionStatus
 from app.schemas.schemas import InspectionJobOut, InspectionFrameOut
 from app.services.vision.video_inspection import process_inspection_job_async
+from app.services.media.validation import safe_upload_name
 from app.db.database import AsyncSessionLocal
 
 router = APIRouter(prefix="/inspections", tags=["inspections"])
@@ -39,16 +39,25 @@ async def create_inspection_job(
 ):
     upload_dir = Path(settings.UPLOAD_DIR) / "inspections"
     upload_dir.mkdir(parents=True, exist_ok=True)
-    
-    media_path = upload_dir / f"src_{media_file.filename}"
-    with open(media_path, "wb") as buffer:
-        shutil.copyfileobj(media_file.file, buffer)
+
+    media_bytes = await media_file.read()
+    if len(media_bytes) > settings.max_video_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Video exceeds {settings.MAX_VIDEO_UPLOAD_SIZE_MB} MB limit",
+        )
+    media_name = safe_upload_name(media_file.filename, default_ext=".mp4")
+    media_path = upload_dir / media_name
+    media_path.write_bytes(media_bytes)
 
     gps_path_str = None
     if gps_track_file:
-        gps_path = upload_dir / f"gps_{gps_track_file.filename}"
-        with open(gps_path, "wb") as buffer:
-            shutil.copyfileobj(gps_track_file.file, buffer)
+        gps_bytes = await gps_track_file.read()
+        if len(gps_bytes) > settings.max_upload_bytes:
+            raise HTTPException(status_code=413, detail="GPS track file is too large")
+        gps_name = safe_upload_name(gps_track_file.filename, default_ext=".json")
+        gps_path = upload_dir / gps_name
+        gps_path.write_bytes(gps_bytes)
         gps_path_str = str(gps_path)
 
     job = InspectionJob(

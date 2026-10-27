@@ -1,10 +1,10 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Camera, Upload, MapPin, CheckCircle2, ArrowLeft, AlertTriangle, Loader2, RefreshCw, User } from 'lucide-react';
-import { LocationPickerMap } from '../components/Map';
+import React, { useState, useRef, useCallback } from 'react';
+import { Camera, Upload, CheckCircle2, ArrowLeft, RefreshCw } from 'lucide-react';
+import { RideHailingLocationPicker } from '../components/RideHailingLocationPicker';
 import { Button } from '../components/Button';
 import { Input, Textarea, Select } from '../components/FormElements';
-import { Alert, Skeleton } from '../components/Feedback';
+import { Alert } from '../components/Feedback';
+import { PublicHeader } from '../components/PublicHeader';
 import { DAMAGE_TYPE_OPTIONS } from '../lib/constants';
 import { useAuth } from '../features/auth/AuthContext';
 import api from '../lib/api';
@@ -26,7 +26,7 @@ interface FormState {
 }
 
 export default function ReportPage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const [step, setStep] = useState<Step>('photo');
   const [form, setForm] = useState<FormState>({
     image: null,
@@ -40,8 +40,6 @@ export default function ReportPage() {
     address_hint: '',
     submitter_email: user?.email ?? '',
   });
-  const [gpsLoading, setGpsLoading] = useState(false);
-  const [gpsError, setGpsError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SubmitConfirmation | null>(null);
@@ -62,36 +60,45 @@ export default function ReportPage() {
     setForm((f) => ({ ...f, image: file, imagePreview: url }));
   }
 
-  function requestGps() {
-    if (!navigator.geolocation) {
-      setGpsError('Location is not supported by your browser.');
-      return;
-    }
-    setGpsLoading(true);
-    setGpsError(null);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm((f) => ({
+  const handleLocationSelect = useCallback(
+    ({
+      lat,
+      lng,
+      accuracy,
+      source,
+      addressHint,
+    }: {
+      lat: number;
+      lng: number;
+      accuracy: number | null;
+      source: 'gps' | 'manual' | 'search';
+      addressHint: string;
+    }) => {
+      setForm((f) => {
+        if (
+          f.lat === lat &&
+          f.lng === lng &&
+          f.location_accuracy === accuracy &&
+          f.location_source === source &&
+          (f.address_hint === addressHint || (!addressHint && f.address_hint))
+        ) {
+          return f;
+        }
+        return {
           ...f,
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          location_source: 'gps',
-          location_accuracy: pos.coords.accuracy,
-        }));
-        setGpsLoading(false);
-      },
-      (err) => {
-        setGpsError('Could not get your location. You can pin it on the map below.');
-        setGpsLoading(false);
-      },
-      { timeout: 10000 }
-    );
-  }
-
-  useEffect(() => { requestGps(); }, []);
+          lat,
+          lng,
+          location_accuracy: accuracy,
+          location_source: source,
+          address_hint: addressHint || f.address_hint,
+        };
+      });
+    },
+    []
+  );
 
   async function handleSubmit() {
-    if (!form.image) return;
+    if (!form.image || form.lat === null || form.lng === null) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -135,6 +142,30 @@ export default function ReportPage() {
             <p className="text-xs text-gray-500">Your reference number</p>
             <p className="text-xl font-mono font-bold text-gray-900 tracking-wider">{result.public_ref}</p>
           </div>
+
+          {result.claim_token && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-left space-y-1">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-emerald-900">Guest Claim Token</p>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">Save for linking</span>
+              </div>
+              <p className="text-xs font-mono break-all text-emerald-800 bg-white/80 p-1.5 rounded border border-emerald-200 select-all">
+                {result.claim_token}
+              </p>
+              <p className="text-[11px] text-emerald-700">
+                Keep this token private. If you create an account later, you can use it to link this report to your profile.
+              </p>
+            </div>
+          )}
+
+          {user && (
+            <p className="text-xs text-stone-600 text-center">
+              Linked to your account (<strong>{user.email}</strong>). View under{' '}
+              <a href="/my-reports" className="text-[#14462a] font-semibold underline">
+                My Reports
+              </a>.
+            </p>
+          )}
           {result.ai_assessment && result.ai_assessment['model_available'] && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left space-y-1">
               <p className="text-xs font-medium text-blue-800">AI preliminary assessment</p>
@@ -178,31 +209,7 @@ export default function ReportPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-accent rounded-md flex items-center justify-center">
-            <MapPin className="w-3.5 h-3.5 text-white" />
-          </div>
-          <span className="font-semibold text-gray-900 text-sm">Paventra</span>
-        </div>
-        <div className="flex-1" />
-        <div className="flex items-center gap-3 text-xs">
-          <Link to="/track" className="text-gray-600 hover:text-gray-900">
-            Track report
-          </Link>
-          {isAuthenticated ? (
-            <Link to="/my-reports" className="text-accent font-medium hover:underline flex items-center gap-1">
-              <User className="w-3 h-3" />
-              My reports
-            </Link>
-          ) : (
-            <Link to="/login" className="text-accent font-medium hover:underline">
-              Sign in
-            </Link>
-          )}
-        </div>
-      </header>
+      <PublicHeader current="report" />
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
         {/* Progress */}
@@ -314,47 +321,55 @@ export default function ReportPage() {
         {step === 'location' && (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <button onClick={() => setStep('photo')} className="text-gray-500 hover:text-gray-700">
+              <button
+                type="button"
+                onClick={() => setStep('photo')}
+                className="text-stone-500 hover:text-stone-800 p-1 rounded-md hover:bg-stone-100 transition-colors"
+                aria-label="Back to photo step"
+              >
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-lg font-semibold text-gray-900">Confirm location</h1>
-                <p className="text-sm text-gray-500">Tap the map to pin the exact location</p>
+                <h1 className="text-lg font-semibold text-stone-900">Confirm defect location</h1>
+                <p className="text-xs text-stone-500">
+                  Pan the map to position the center pin directly over the pavement distress
+                </p>
               </div>
             </div>
 
-            {gpsLoading && (
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Getting your location…
-              </div>
-            )}
-            {gpsError && <Alert type="warning" message={gpsError} />}
-            {form.lat && !gpsLoading && (
-              <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-1.5">
-                <MapPin className="w-3.5 h-3.5" />
-                GPS: {form.lat.toFixed(5)}, {form.lng?.toFixed(5)}
-                {form.location_accuracy && <span className="text-green-600 ml-1">(±{Math.round(form.location_accuracy)}m)</span>}
-              </div>
-            )}
-
-            <LocationPickerMap
-              lat={form.lat}
-              lng={form.lng}
-              onPick={(lat, lng) => setForm((f) => ({ ...f, lat, lng, location_source: f.location_source === 'gps' ? 'gps' : 'manual' }))}
+            <RideHailingLocationPicker
+              initialLat={form.lat}
+              initialLng={form.lng}
+              initialAccuracy={form.location_accuracy}
+              initialSource={form.location_source}
+              initialAddress={form.address_hint}
+              onLocationSelect={handleLocationSelect}
             />
 
             <Input
-              label="Address or landmark (optional)"
+              label="Landmark / specific instructions (optional)"
               value={form.address_hint}
               onChange={(e) => setForm((f) => ({ ...f, address_hint: e.target.value }))}
-              placeholder="e.g. Near Gandhi Chowk, MG Road"
+              placeholder="e.g. Near bus stop, slow lane towards flyover, in front of gate 2"
             />
 
-            <div className="flex gap-3">
-              <Button variant="secondary" onClick={() => setStep('photo')} className="flex-1">Back</Button>
-              <Button onClick={() => setStep('review')} className="flex-1">Review &amp; Submit</Button>
+            <div className="flex gap-3 pt-2">
+              <Button variant="secondary" onClick={() => setStep('photo')} className="flex-1">
+                Back
+              </Button>
+              <Button
+                onClick={() => setStep('review')}
+                className="flex-1"
+                disabled={form.lat === null || form.lng === null}
+              >
+                Review &amp; Submit
+              </Button>
             </div>
+            {form.lat === null && (
+              <p className="text-xs text-amber-700">
+                Please place the pin on the road location or search an address above before proceeding.
+              </p>
+            )}
           </div>
         )}
 

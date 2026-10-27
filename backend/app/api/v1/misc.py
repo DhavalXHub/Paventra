@@ -22,6 +22,16 @@ from app.services.analytics.summary import get_summary_stats, get_trends
 
 logger = logging.getLogger(__name__)
 
+from pydantic import BaseModel, Field
+from app.services.prioritization.fuzzy_engine import compute_priority, evaluate_all_memberships
+
+class FuzzySimulateRequest(BaseModel):
+    severity: float = Field(5.0, ge=0.0, le=10.0, description="Estimated damage severity (0-10)")
+    traffic_exposure: float = Field(5.0, ge=0.0, le=10.0, description="Traffic volume / road hierarchy (0-10)")
+    time_unresolved_days: float = Field(0.0, ge=0.0, le=365.0, description="Days pending (0-365)")
+    safety_urgency: float = Field(5.0, ge=0.0, le=10.0, description="Pedestrian/rider safety urgency (0-10)")
+
+
 # ─── Teams ────────────────────────────────────────────────────────────────────
 teams_router = APIRouter(prefix="/teams", tags=["teams"])
 
@@ -252,7 +262,7 @@ async def analytics_trends(
 async def analytics_batch_summary(
     _: User = Depends(require_coordinator),
 ):
-    """Returns the latest PySpark / Reference big data batch analytics cluster results."""
+    """Return a previously generated batch analytics file. Does not run Spark inline."""
     from pathlib import Path
     import json
     candidates = [
@@ -265,13 +275,165 @@ async def analytics_batch_summary(
         if p.exists():
             try:
                 with open(p, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    payload = json.load(f)
+                payload.setdefault(
+                    "data_origin_note",
+                    "This file is a batch job export. It may be a labeled synthetic fixture or a live database export.",
+                )
+                return payload
             except Exception:
-                pass
+                logger.warning("Could not read batch analytics file %s", p)
 
-    from analytics.jobs.road_damage_batch_analytics import execute_analytics_suite
-    results, _ = execute_analytics_suite()
-    return results
+    raise HTTPException(
+        status_code=404,
+        detail="No batch analytics summary has been generated. Run analytics/jobs/road_damage_batch_analytics.py.",
+    )
+
+
+@analytics_router.post("/fuzzy-simulate")
+async def simulate_fuzzy_priority(
+    payload: FuzzySimulateRequest,
+):
+    """
+    Simulates the 22-rule Mamdani Fuzzy Inference System with full academic explainability.
+    Publicly accessible so evaluators, students, and coordinators can test inference in real time.
+    """
+    res = compute_priority(
+        severity_numeric=payload.severity,
+        traffic_exposure=payload.traffic_exposure,
+        time_unresolved_days=payload.time_unresolved_days,
+        safety_urgency=payload.safety_urgency,
+    )
+    delta = round(res.priority_score - res.baseline_score, 2)
+    return {
+        "priority_score": res.priority_score,
+        "priority_label": res.priority_label,
+        "engine_used": res.engine_used,
+        "baseline_score": res.baseline_score,
+        "decision_delta": delta,
+        "top_contributing_factors": res.top_contributing_factors,
+        "membership_activations": res.membership_activations,
+        "explanation_narrative": res.explanation_narrative,
+        "inputs": res.inputs,
+    }
+
+
+@analytics_router.get("/fuzzy-metadata")
+async def get_fuzzy_system_metadata():
+    """
+    Returns mathematical membership function parameters, linguistic terms,
+    and rule base specifications for frontend visualization and academic defense.
+    """
+    return {
+        "inference_engine": "Mamdani Fuzzy Inference System",
+        "defuzzification": "Centroid (Center of Gravity / COG)",
+        "implication_operator": "Mamdani Minimum (min)",
+        "aggregation_operator": "Maximum (max)",
+        "universes_of_discourse": {
+            "severity": {"min": 0.0, "max": 10.0, "unit": "distress_score", "step": 0.1},
+            "traffic": {"min": 0.0, "max": 10.0, "unit": "volume_index", "step": 0.1},
+            "time_days": {"min": 0.0, "max": 365.0, "unit": "days", "step": 1.0},
+            "safety": {"min": 0.0, "max": 10.0, "unit": "hazard_index", "step": 0.1},
+            "priority": {"min": 0.0, "max": 100.0, "unit": "priority_score", "step": 0.5},
+        },
+        "membership_functions": {
+            "severity": {
+                "low": {"type": "trimf", "params": [0.0, 0.0, 4.0]},
+                "moderate": {"type": "trimf", "params": [2.0, 5.0, 8.0]},
+                "high": {"type": "trimf", "params": [6.0, 8.0, 10.0]},
+                "critical": {"type": "trimf", "params": [8.5, 10.0, 10.0]},
+            },
+            "traffic": {
+                "low": {"type": "trimf", "params": [0.0, 0.0, 4.0]},
+                "medium": {"type": "trimf", "params": [2.0, 5.0, 8.0]},
+                "high": {"type": "trimf", "params": [6.0, 10.0, 10.0]},
+            },
+            "time_days": {
+                "short": {"type": "trimf", "params": [0.0, 0.0, 30.0]},
+                "medium": {"type": "trimf", "params": [14.0, 60.0, 120.0]},
+                "long": {"type": "trimf", "params": [60.0, 120.0, 200.0]},
+                "very_long": {"type": "trimf", "params": [150.0, 365.0, 365.0]},
+            },
+            "safety": {
+                "low": {"type": "trimf", "params": [0.0, 0.0, 4.0]},
+                "medium": {"type": "trimf", "params": [2.0, 5.0, 8.0]},
+                "high": {"type": "trimf", "params": [6.0, 10.0, 10.0]},
+            },
+            "priority": {
+                "low": {"type": "trimf", "params": [0.0, 0.0, 30.0]},
+                "medium": {"type": "trimf", "params": [20.0, 37.0, 55.0]},
+                "medium_high": {"type": "trimf", "params": [45.0, 60.0, 75.0]},
+                "high": {"type": "trimf", "params": [65.0, 78.0, 90.0]},
+                "critical": {"type": "trimf", "params": [85.0, 100.0, 100.0]},
+            },
+        },
+        "rules_count": 22,
+        "rule_base": [
+            "R01: IF severity IS critical AND safety IS high THEN priority IS critical",
+            "R02: IF severity IS critical AND safety IS medium THEN priority IS critical",
+            "R03: IF severity IS critical AND safety IS low THEN priority IS high",
+            "R04: IF severity IS high AND safety IS high THEN priority IS critical",
+            "R05: IF severity IS high AND traffic IS high THEN priority IS high",
+            "R06: IF severity IS high AND traffic IS medium THEN priority IS high",
+            "R07: IF severity IS high AND traffic IS low THEN priority IS medium_high",
+            "R08: IF severity IS moderate AND safety IS high THEN priority IS high",
+            "R09: IF severity IS moderate AND time_days IS very_long THEN priority IS high",
+            "R10: IF severity IS moderate AND time_days IS long AND traffic IS high THEN priority IS high",
+            "R11: IF traffic IS high AND severity IS moderate THEN priority IS medium_high",
+            "R12: IF severity IS moderate AND safety IS medium THEN priority IS medium_high",
+            "R13: IF severity IS low AND safety IS high THEN priority IS medium_high",
+            "R14: IF severity IS moderate AND traffic IS medium THEN priority IS medium",
+            "R15: IF severity IS moderate AND traffic IS low THEN priority IS medium",
+            "R16: IF severity IS low AND time_days IS very_long THEN priority IS medium",
+            "R17: IF severity IS low AND traffic IS high AND time_days IS long THEN priority IS medium",
+            "R18: IF severity IS low AND safety IS low THEN priority IS low",
+            "R19: IF severity IS low AND time_days IS short THEN priority IS low",
+            "R20: IF severity IS low AND traffic IS medium THEN priority IS low",
+            "R21: IF severity IS low AND traffic IS low THEN priority IS low",
+            "R22: IF safety IS high AND traffic IS high THEN priority IS high",
+        ],
+    }
+
+
+@analytics_router.get("/soft-computing-benchmark")
+async def get_soft_computing_benchmark():
+    """
+    Returns tabular benchmark dataset records and summary statistics
+    for empirical evaluation of fuzzy priority vs baseline weighted scoring.
+    """
+    from pathlib import Path
+    import json
+    candidates = [
+        Path("analytics/fixtures/soft_computing_maintenance_benchmark.json"),
+        Path("../analytics/fixtures/soft_computing_maintenance_benchmark.json"),
+    ]
+    for p in candidates:
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                records = json.load(f)
+            # Calculate aggregate statistics
+            total = len(records)
+            avg_fuzzy = round(sum(r["fuzzy_priority_score"] for r in records) / max(1, total), 2)
+            avg_base = round(sum(r["baseline_weighted_score"] for r in records) / max(1, total), 2)
+            critical_count = sum(1 for r in records if r["priority_label"] == "CRITICAL")
+            high_count = sum(1 for r in records if r["priority_label"] == "HIGH")
+            elevated_by_fuzzy = sum(1 for r in records if r["decision_delta"] >= 5.0)
+            subdued_by_fuzzy = sum(1 for r in records if r["decision_delta"] <= -5.0)
+
+            return {
+                "total_records": total,
+                "summary": {
+                    "average_fuzzy_priority": avg_fuzzy,
+                    "average_baseline_score": avg_base,
+                    "critical_reports": critical_count,
+                    "high_reports": high_count,
+                    "cases_elevated_by_fuzzy": elevated_by_fuzzy,
+                    "cases_subdued_by_fuzzy": subdued_by_fuzzy,
+                },
+                "records_sample": records[:50],
+            }
+
+    raise HTTPException(status_code=404, detail="Benchmark dataset not found. Run generate_benchmark_dataset.py.")
 
 
 # ─── Audit ────────────────────────────────────────────────────────────────────

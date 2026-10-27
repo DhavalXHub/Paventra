@@ -5,12 +5,21 @@ from httpx import AsyncClient, ASGITransport
 import io
 import uuid
 
+from PIL import Image
+
 from app.main import app
 from app.core.security import hash_password, create_access_token
 from app.db.database import AsyncSessionLocal, init_db
 from app.models.user import User, UserRole
 from app.models.report import Report, ReportStatus, ReportSource, DamageType
 from sqlalchemy import select
+
+
+def _jpeg_bytes(size: int = 64) -> io.BytesIO:
+    buf = io.BytesIO()
+    Image.new("RGB", (size, size), (90, 90, 90)).save(buf, format="JPEG")
+    buf.seek(0)
+    return buf
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -55,8 +64,7 @@ async def test_health_and_readiness():
 async def test_citizen_report_submission_and_tracking():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        fake_image = io.BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF" + b"\x00" * 100)
-        files = {"image": ("test_pothole.jpg", fake_image, "image/jpeg")}
+        files = {"image": ("test_pothole.jpg", _jpeg_bytes(), "image/jpeg")}
         data = {
             "description": "Large pothole near city center",
             "damage_type": "pothole",
@@ -83,7 +91,7 @@ async def test_citizen_report_submission_and_tracking():
         assert len(track_json["history"]) >= 1
 
         # 3. Citizen submits additional evidence
-        ev_img = io.BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF" + b"\x00" * 50)
+        ev_img = _jpeg_bytes(48)
         ev_res = await client.post(
             f"/api/v1/reports/track/{pub_ref}/evidence",
             data={"notes": "Pothole depth has increased after rain"},
@@ -97,13 +105,25 @@ async def test_citizen_report_submission_and_tracking():
 async def test_invalid_coordinates_rejected():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        fake_image = io.BytesIO(b"\xff\xd8\xff\xe0" + b"\x00" * 50)
-        files = {"image": ("bad.jpg", fake_image, "image/jpeg")}
+        files = {"image": ("bad.jpg", _jpeg_bytes(), "image/jpeg")}
         data = {
             "latitude": "999.0",  # Out of range
             "longitude": "72.8777",
         }
         res = await client.post("/api/v1/reports", data=data, files=files)
+        assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_invalid_image_rejected():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        files = {"image": ("notes.txt", b"this is not an image", "text/plain")}
+        res = await client.post("/api/v1/reports", data={"latitude": "19.07", "longitude": "72.87"}, files=files)
+        assert res.status_code == 400
+
+        files = {"image": ("corrupt.jpg", b"not-a-real-jpeg", "image/jpeg")}
+        res = await client.post("/api/v1/reports", data={"latitude": "19.07", "longitude": "72.87"}, files=files)
         assert res.status_code == 400
 
 
@@ -351,7 +371,7 @@ async def test_repair_team_workflow():
         assert start_res.json()["status"] == "in_progress"
 
         # 3. Team uploads completion evidence
-        comp_img = io.BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF" + b"\x00" * 50)
+        comp_img = _jpeg_bytes(48)
         comp_res = await client.post(
             f"/api/v1/reports/{rep_id}/completion",
             data={"notes": "Pothole filled and leveled"},
@@ -417,3 +437,289 @@ async def test_verified_severity_and_analytics_serialization():
         markers = map_res.json()
         for m in markers:
             assert not m["status"].startswith("ReportStatus.")
+
+
+@pytest.mark.asyncio
+async def test_report_submission_rate_limiting(monkeypatch):
+    """Verify that submitting reports beyond RATE_LIMIT_REPORTS_PER_HOUR returns 429 and changing email does not bypass IP rate limit."""
+    from app.core.config import settings
+    from app.core.rate_limiter import _memory_limiter
+    _memory_limiter.clear()
+
+    monkeypatch.setattr(settings, "RATE_LIMIT_REPORTS_PER_HOUR", 2)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Submit 1 (spammer1@example.com)
+        f1 = {"image": ("p1.jpg", _jpeg_bytes().getvalue(), "image/jpeg")}
+        d1 = {"latitude": "19.0760", "longitude": "72.8777", "submitter_email": "spammer1@example.com"}
+        r1 = await client.post("/api/v1/reports", data=d1, files=f1)
+        assert r1.status_code == 201
+
+        # Submit 2 (spammer2@example.com - attempts bypass by changing email from same client IP)
+        f2 = {"image": ("p2.jpg", _jpeg_bytes().getvalue(), "image/jpeg")}
+        d2 = {"latitude": "19.0760", "longitude": "72.8777", "submitter_email": "spammer2@example.com"}
+        r2 = await client.post("/api/v1/reports", data=d2, files=f2)
+        assert r2.status_code == 201
+
+        # Submit 3 (spammer3@example.com) -> Exceeds IP rate limit of 2/hour
+        f3 = {"image": ("p3.jpg", _jpeg_bytes().getvalue(), "image/jpeg")}
+        d3 = {"latitude": "19.0760", "longitude": "72.8777", "submitter_email": "spammer3@example.com"}
+        r3 = await client.post("/api/v1/reports", data=d3, files=f3)
+        assert r3.status_code == 429
+        assert "Rate limit exceeded" in r3.json()["detail"]
+
+    _memory_limiter.clear()
+
+
+@pytest.mark.asyncio
+async def test_auth_config_and_google_disabled_safeguard(monkeypatch):
+    """Verify auth config discovery and unconfigured Google sign-in rejection."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "GOOGLE_OAUTH_ENABLED", False)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Config discovery when disabled
+        cfg_res = await client.get("/api/v1/auth/config")
+        assert cfg_res.status_code == 200
+        cfg = cfg_res.json()
+        assert cfg["google_enabled"] is False
+
+        # Google login when disabled returns 501
+        g_res = await client.post("/api/v1/auth/google", json={"credential": "fake-google-id-token"})
+        assert g_res.status_code == 501
+        assert "not configured" in g_res.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_google_auth_validation_scenarios(monkeypatch):
+    """Test full matrix of Google ID token validation: audience, issuer, expiry, verified email, new user, existing user, linking."""
+    import time
+    from app.core.config import settings
+    import httpx
+
+    test_client_id = "test-client-id-12345.apps.googleusercontent.com"
+    monkeypatch.setattr(settings, "GOOGLE_OAUTH_ENABLED", True)
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID", test_client_id)
+
+    class MockResponse:
+        def __init__(self, status_code: int, data: dict):
+            self.status_code = status_code
+            self._data = data
+
+        def json(self):
+            return self._data
+
+    current_mock_resp = MockResponse(200, {})
+
+    async def mock_get(self, url, params=None):
+        return current_mock_resp
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Invalid token (Google tokeninfo returns 400)
+        current_mock_resp = MockResponse(400, {"error": "invalid_token"})
+        r = await client.post("/api/v1/auth/google", json={"credential": "bad-token"})
+        assert r.status_code == 401
+        assert "invalid or expired" in r.json()["detail"].lower()
+
+        # 2. Audience mismatch
+        current_mock_resp = MockResponse(200, {
+            "iss": "accounts.google.com",
+            "aud": "wrong-client-id",
+            "email": "user@example.com",
+            "email_verified": True,
+            "sub": "sub-1",
+        })
+        r = await client.post("/api/v1/auth/google", json={"credential": "valid-token"})
+        assert r.status_code == 401
+        assert "audience" in r.json()["detail"].lower()
+
+        # 3. Untrusted issuer
+        current_mock_resp = MockResponse(200, {
+            "iss": "https://malicious-issuer.com",
+            "aud": test_client_id,
+            "email": "user@example.com",
+            "email_verified": True,
+            "sub": "sub-1",
+        })
+        r = await client.post("/api/v1/auth/google", json={"credential": "valid-token"})
+        assert r.status_code == 401
+        assert "untrusted" in r.json()["detail"].lower()
+
+        # 4. Unverified email
+        current_mock_resp = MockResponse(200, {
+            "iss": "https://accounts.google.com",
+            "aud": test_client_id,
+            "email": "user@example.com",
+            "email_verified": False,
+            "sub": "sub-1",
+        })
+        r = await client.post("/api/v1/auth/google", json={"credential": "valid-token"})
+        assert r.status_code == 400
+        assert "not verified" in r.json()["detail"].lower()
+
+        # 5. Expired token
+        current_mock_resp = MockResponse(200, {
+            "iss": "https://accounts.google.com",
+            "aud": test_client_id,
+            "email": "user@example.com",
+            "email_verified": True,
+            "exp": str(int(time.time()) - 3600),
+            "sub": "sub-1",
+        })
+        r = await client.post("/api/v1/auth/google", json={"credential": "valid-token"})
+        assert r.status_code == 401
+        assert "expired" in r.json()["detail"].lower()
+
+        # 6. Controlled successful login: New Citizen User
+        unique_sub = f"g_sub_{uuid.uuid4().hex[:8]}"
+        unique_email = f"new_google_user_{uuid.uuid4().hex[:6]}@example.com"
+        current_mock_resp = MockResponse(200, {
+            "iss": "accounts.google.com",
+            "aud": test_client_id,
+            "email": unique_email,
+            "email_verified": True,
+            "name": "Google Tester",
+            "exp": str(int(time.time()) + 3600),
+            "sub": unique_sub,
+        })
+        r = await client.post("/api/v1/auth/google", json={"credential": "good-token"})
+        assert r.status_code == 200
+        data = r.json()
+        assert "access_token" in data
+        assert data["role"] == "citizen"
+
+        # 7. Controlled successful login: Existing Google User (same sub)
+        r2 = await client.post("/api/v1/auth/google", json={"credential": "good-token"})
+        assert r2.status_code == 200
+        assert "access_token" in r2.json()
+
+        # 8. Safe Account Linking: Email matches existing password user
+        # User exists: test_citizen@paventra.local (password: CitizenPass123!)
+        linking_sub = f"g_sub_{uuid.uuid4().hex[:8]}"
+        current_mock_resp = MockResponse(200, {
+            "iss": "accounts.google.com",
+            "aud": test_client_id,
+            "email": "test_citizen@paventra.local",
+            "email_verified": True,
+            "name": "Citizen Match",
+            "exp": str(int(time.time()) + 3600),
+            "sub": linking_sub,
+        })
+        # Attempt without linking confirmation -> 409 Conflict
+        r_link1 = await client.post("/api/v1/auth/google", json={"credential": "good-token"})
+        assert r_link1.status_code == 409
+        assert "already exists" in r_link1.json()["detail"].lower()
+
+        # Attempt with wrong password -> 401 Unauthorized
+        r_link2 = await client.post("/api/v1/auth/google", json={
+            "credential": "good-token",
+            "link_existing": True,
+            "password_for_linking": "WrongPassword!",
+        })
+        assert r_link2.status_code == 401
+        assert "incorrect password" in r_link2.json()["detail"].lower()
+
+        # Attempt with correct password -> 200 OK and linked!
+        r_link3 = await client.post("/api/v1/auth/google", json={
+            "credential": "good-token",
+            "link_existing": True,
+            "password_for_linking": "CitizenPass123!",
+        })
+        assert r_link3.status_code == 200
+        assert "access_token" in r_link3.json()
+
+
+@pytest.mark.asyncio
+async def test_citizen_registration_prevents_privilege_escalation():
+    """Verify self-registration cannot escalate to coordinator or admin."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        unique_email = f"citizen_esc_{uuid.uuid4().hex[:6]}@example.com"
+        reg_res = await client.post("/api/v1/auth/register", json={
+            "email": unique_email,
+            "full_name": "Hacker Attempt",
+            "password": "SecurePassword123!",
+            "role": "coordinator",  # attempted privilege escalation
+        })
+        assert reg_res.status_code == 201
+        data = reg_res.json()
+        assert data["role"] == "citizen"  # server enforced citizen role!
+
+
+@pytest.mark.asyncio
+async def test_guest_submission_claim_token_and_claiming():
+    """Verify guest submissions generate claim tokens and can be securely claimed by a citizen."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Citizen login
+        login_res = await client.post("/api/v1/auth/login", json={
+            "email": "test_citizen@paventra.local",
+            "password": "CitizenPass123!",
+        })
+        assert login_res.status_code == 200
+        citizen_token = login_res.json()["access_token"]
+        citizen_headers = {"Authorization": f"Bearer {citizen_token}"}
+
+        # 2. Guest submits report
+        f = {"image": ("pothole_guest.jpg", _jpeg_bytes().getvalue(), "image/jpeg")}
+        d = {
+            "latitude": "12.9716",
+            "longitude": "77.5946",
+            "damage_type": "pothole",
+            "description": "Guest reported crater",
+            "address_hint": "MG Road",
+        }
+        guest_res = await client.post("/api/v1/reports", data=d, files=f)
+        assert guest_res.status_code == 201
+        guest_data = guest_res.json()
+        public_ref = guest_data["public_ref"]
+        claim_token = guest_data.get("claim_token")
+        assert claim_token is not None  # Guest got claim token!
+
+        # 3. Public tracking returns status and is_claimed=False
+        track_res = await client.get(f"/api/v1/reports/track/{public_ref}")
+        assert track_res.status_code == 200
+        track_data = track_res.json()
+        assert track_data["is_claimed"] is False
+        assert track_data["public_ref"] == public_ref
+        assert "submitter_email" not in track_data  # Privacy check!
+
+        # 4. Check that /reports/mine does NOT yet have this report
+        mine_res = await client.get("/api/v1/reports/mine", headers=citizen_headers)
+        assert mine_res.status_code == 200
+        refs = [r["public_ref"] for r in mine_res.json()]
+        assert public_ref not in refs
+
+        # 5. Invalid claim attempt fails
+        bad_claim = await client.post(
+            "/api/v1/reports/claim",
+            headers=citizen_headers,
+            json={"public_ref": public_ref, "claim_token": "wrong-token"},
+        )
+        assert bad_claim.status_code == 400
+
+        # 6. Valid claim attempt succeeds
+        good_claim = await client.post(
+            "/api/v1/reports/claim",
+            headers=citizen_headers,
+            json={"public_ref": public_ref, "claim_token": claim_token},
+        )
+        assert good_claim.status_code == 200
+        assert good_claim.json()["status"] == "ok"
+
+        # 7. Check that /reports/mine now includes this report
+        mine_res2 = await client.get("/api/v1/reports/mine", headers=citizen_headers)
+        assert mine_res2.status_code == 200
+        refs2 = [r["public_ref"] for r in mine_res2.json()]
+        assert public_ref in refs2
+
+        # 8. Tracking now shows is_claimed=True
+        track_res2 = await client.get(f"/api/v1/reports/track/{public_ref}")
+        assert track_res2.status_code == 200
+        assert track_res2.json()["is_claimed"] is True

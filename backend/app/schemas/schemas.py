@@ -39,6 +39,31 @@ class UserCreate(BaseModel):
     role: str = "citizen"
 
 
+class AuthConfigResponse(BaseModel):
+    google_enabled: bool
+    google_client_id: Optional[str] = None
+    environment: str = "development"
+
+
+class GoogleAuthRequest(BaseModel):
+    credential: str  # Google ID token (JWT)
+    link_existing: bool = False
+    password_for_linking: Optional[str] = None
+
+
+class ReportClaimRequest(BaseModel):
+    public_ref: str
+    verification_email: Optional[str] = None
+    claim_token: Optional[str] = None
+
+
+class ReportClaimResponse(BaseModel):
+    status: str
+    message: str
+    public_ref: str
+    claimed_at: datetime
+
+
 # ─── Reports ─────────────────────────────────────────────────────────────────
 
 class ReportSubmit(BaseModel):
@@ -285,3 +310,4 @@ class SubmitConfirmation(BaseModel):
     status: str
     ai_assessment: Optional[dict[str, Any]] = None
     message: str
+    claim_token: Optional[str] = None

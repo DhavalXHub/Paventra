@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Wrench, MapPin, Calendar, Clock, CheckCircle2, Play, Upload, ExternalLink, LogOut, AlertCircle, FileText } from 'lucide-react';
+import { Wrench, MapPin, Calendar, Clock, CheckCircle2, Play, Upload, ExternalLink, LogOut, AlertCircle, FileText, Home } from 'lucide-react';
 import api from '../lib/api';
 import { useAuth } from '../features/auth/AuthContext';
 import { StatusBadge, SeverityBadge } from '../components/Badge';
@@ -94,7 +94,11 @@ export default function TeamJobsPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Top Bar */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <Link
+          to="/"
+          className="flex items-center gap-2 group hover:opacity-90 transition-opacity"
+          title="Return to Public Homepage"
+        >
           <div className="w-7 h-7 bg-accent rounded-md flex items-center justify-center">
             <Wrench className="w-4 h-4 text-white" />
           </div>
@@ -104,9 +108,17 @@ export default function TeamJobsPage() {
               Repair Operations Portal
             </span>
           </div>
-        </div>
+        </Link>
 
         <div className="flex items-center gap-4">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-md border border-stone-200 transition-colors"
+            title="Return to public homepage"
+          >
+            <Home className="w-3.5 h-3.5 text-stone-500" />
+            <span className="hidden sm:inline">Public Home</span>
+          </Link>
           <div className="text-right hidden sm:block">
             <p className="text-xs font-semibold text-gray-900">{user?.full_name}</p>
             <p className="text-[11px] text-gray-500">{user?.email}</p>
@@ -309,7 +321,7 @@ export default function TeamJobsPage() {
 
                       <div>
                         <label className="block text-xs font-semibold text-gray-700 mb-1">
-                          After-repair photograph (recommended)
+                          After-repair photograph (required)
                         </label>
                         <input
                           ref={fileInputRef}
@@ -338,6 +350,7 @@ export default function TeamJobsPage() {
                         </Button>
                         <Button
                           size="sm"
+                          disabled={!completionPhoto}
                           loading={completionMutation.isPending}
                           onClick={() => completionMutation.mutate(job.report_id)}
                         >

@@ -29,6 +29,7 @@ class User(Base):
         Enum(UserRole), nullable=False, default=UserRole.CITIZEN
     )
     team_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("repair_teams.id"), nullable=True)
+    google_id: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

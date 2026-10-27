@@ -11,13 +11,30 @@ venv/
 *.sqlite3
 
 # Uploads & temporary artifacts
+uploads/
+analytics/fixtures/db_exported_reports.json
 backend/uploads/reports/*
 backend/uploads/completions/*
 backend/uploads/inspections/*
 backend/uploads/*.json
 !backend/uploads/*/.gitkeep
 backend/.env
+frontend/.env
+frontend/.env.local
+.env
+.env.local
 *.pt
+
+# Large Datasets & Archives
+data/road_damage/raw/*
+!data/road_damage/raw/.gitkeep
+data/road_damage/processed/*
+!data/road_damage/processed/.gitkeep
+data/road_damage/models/*
+!data/road_damage/models/.gitkeep
+*.tar.gz
+*.zip
+*.tar
 
 # Node
 node_modules/
@@ -30,3 +47,39 @@ dist/
 .coverage
 htmlcov/
 .tmp/
+
+# Frontend build and local configuration
+frontend/.vite/
+frontend/coverage/
+
+# Python testing and tooling
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+
+# Local logs
+*.log
+npm-debug.log*
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Local database backups and recovery files
+backend/paventra.db*
+*.db.bak
+*.db.corrupt_original
+
+# Dataset raw files and generated artifacts
+data/road_damage/raw/*
+!data/road_damage/raw/.gitkeep
+
+data/road_damage/processed/*
+!data/road_damage/processed/.gitkeep
+
+data/road_damage/models/*
+!data/road_damage/models/.gitkeep
+
+# Local test artifacts (uncomment if sample-test contains private or unlicensed files)
+# sample-test/

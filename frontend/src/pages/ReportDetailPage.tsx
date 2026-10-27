@@ -460,10 +460,12 @@ export default function ReportDetailPage() {
             </Card>
           )}
 
-          {/* Assign team (when verified) */}
-          {report.status === 'verified' && teams && (
+          {/* Assign or reassign team */}
+          {(report.status === 'verified' || report.status === 'assigned') && teams && (
             <Card>
-              <CardHeader><CardTitle>Assign repair team</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>{report.status === 'assigned' ? 'Reassign repair team' : 'Assign repair team'}</CardTitle>
+              </CardHeader>
               <div className="space-y-3">
                 <Select
                   label="Team"
@@ -490,7 +492,7 @@ export default function ReportDetailPage() {
                   loading={assignMutation.isPending}
                   onClick={() => assignMutation.mutate({ team_id: teamId, target_date: targetDate || undefined })}
                 >
-                  Assign team
+                  {report.status === 'assigned' ? 'Reassign team' : 'Assign team'}
                 </Button>
               </div>
             </Card>
@@ -540,7 +542,7 @@ export default function ReportDetailPage() {
                 />
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
-                    After-repair photo (optional)
+                    After-repair photo (required)
                   </label>
                   <input
                     ref={completionFileRef}
@@ -560,6 +562,7 @@ export default function ReportDetailPage() {
                 </div>
                 <Button
                   className="w-full"
+                  disabled={!completionPhoto}
                   loading={completionMutation.isPending}
                   onClick={() => completionMutation.mutate({ notes: completionNotes, photo: completionPhoto })}
                 >

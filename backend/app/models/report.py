@@ -65,6 +65,7 @@ class Report(Base):
 
     submitter_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     submitter_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    claim_token: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     damage_type: Mapped[DamageType] = mapped_column(Enum(DamageType), nullable=False, default=DamageType.UNKNOWN)
     severity: Mapped[SeverityLevel | None] = mapped_column(Enum(SeverityLevel), nullable=True)

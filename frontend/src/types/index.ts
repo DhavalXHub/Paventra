@@ -18,6 +18,12 @@ export interface AuthTokens {
   role: UserRole;
 }
 
+export interface GoogleAuthRequest {
+  credential: string;
+  link_existing?: boolean;
+  password_for_linking?: string;
+}
+
 export type ReportStatus =
   | 'submitted'
   | 'under_review'
@@ -172,6 +178,7 @@ export interface SubmitConfirmation {
   status: string;
   ai_assessment: Record<string, unknown> | null;
   message: string;
+  claim_token?: string | null;
 }
 
 export interface MapMarker {
@@ -199,6 +206,10 @@ export interface TrackResponse {
   status: string;
   damage_type: string;
   severity: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  address_hint?: string | null;
+  is_claimed?: boolean;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;

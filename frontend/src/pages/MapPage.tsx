@@ -36,6 +36,7 @@ export default function MapPage() {
           ['verified', '#2563eb'],
           ['assigned', '#7c3aed'],
           ['in_progress', '#0891b2'],
+          ['pending_verification', '#ea580c'],
           ['resolved', '#16a34a'],
           ['rejected', '#dc2626'],
         ].map(([label, color]) => (
