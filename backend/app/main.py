@@ -97,6 +97,7 @@ async def docs_redirect():
     return RedirectResponse(url="/api/docs")
 
 
+@app.get("/health", include_in_schema=False)
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "version": settings.APP_VERSION, "environment": settings.ENVIRONMENT}

@@ -50,6 +50,8 @@ export type ReportSource = 'citizen' | 'inspection';
 export interface MediaAsset {
   id: string;
   file_name: string;
+  file_path?: string;
+  url?: string;
   mime_type: string;
   file_size_bytes: number;
   asset_type: string;

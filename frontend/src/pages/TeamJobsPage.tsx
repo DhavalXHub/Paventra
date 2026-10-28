@@ -10,6 +10,7 @@ import { Card, CardHeader, CardTitle } from '../components/Card';
 import { Alert, EmptyState, Skeleton } from '../components/Feedback';
 import { Textarea } from '../components/FormElements';
 import { formatDateTime, formatDate } from '../lib/constants';
+import { resolveAssetUrl } from '../lib/assets';
 
 interface RepairJob {
   assignment_id: string;
@@ -31,6 +32,8 @@ interface RepairJob {
   media_assets: Array<{
     id: string;
     file_name: string;
+    file_path?: string;
+    url?: string;
     asset_type: string;
     uploaded_at: string;
   }>;
@@ -163,7 +166,9 @@ export default function TeamJobsPage() {
           <div className="space-y-4">
             {jobs.map((job) => {
               const primaryPhoto = job.media_assets?.find((m) => m.asset_type === 'report_photo') ?? job.media_assets?.[0];
-              const photoUrl = primaryPhoto ? `/uploads/reports/${primaryPhoto.file_name}` : null;
+              const photoUrl = primaryPhoto
+                ? resolveAssetUrl(primaryPhoto.file_path || primaryPhoto.file_name, 'reports')
+                : null;
               const isCompleting = activeJobId === job.report_id;
 
               return (

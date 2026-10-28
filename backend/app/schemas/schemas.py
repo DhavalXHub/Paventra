@@ -94,6 +94,7 @@ class ReportSubmit(BaseModel):
 class MediaAssetOut(BaseModel):
     id: str
     file_name: str
+    file_path: Optional[str] = None
     mime_type: str
     file_size_bytes: int
     asset_type: str
@@ -102,8 +103,11 @@ class MediaAssetOut(BaseModel):
     @computed_field
     @property
     def url(self) -> str:
+        if self.file_path and (self.file_path.startswith("http://") or self.file_path.startswith("https://")):
+            return self.file_path
         folder = "completions" if self.asset_type == "completion_photo" else "reports"
-        return f"/uploads/{folder}/{self.file_name}"
+        from app.services.storage import storage_service
+        return storage_service.get_public_url(self.file_name, folder)
 
     model_config = {"from_attributes": True}
 

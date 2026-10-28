@@ -9,10 +9,17 @@ class Base(DeclarativeBase):
     pass
 
 
+engine_kwargs = {
+    "echo": settings.DEBUG,
+    "future": True,
+}
+if "sqlite" not in settings.DATABASE_URL:
+    engine_kwargs["pool_pre_ping"] = True
+    engine_kwargs["pool_recycle"] = 300
+
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
-    future=True,
+    **engine_kwargs,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -61,4 +68,5 @@ async def init_db() -> None:
                 if col_name not in existing:
                     sync_conn.execute(text(f"ALTER TABLE reports ADD COLUMN {col_name} {col_type}"))
 
-        await conn.run_sync(_migrate_sqlite_columns)
+        if "sqlite" in settings.DATABASE_URL:
+            await conn.run_sync(_migrate_sqlite_columns)

@@ -10,6 +10,7 @@ import { Alert } from '../components/Feedback';
 import { Select, Textarea } from '../components/FormElements';
 import { formatDateTime, NEXT_TRANSITIONS, STATUS_LABELS } from '../lib/constants';
 import { Card, CardHeader, CardTitle } from '../components/Card';
+import { resolveAssetUrl } from '../lib/assets';
 
 export default function ReportDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -203,9 +204,12 @@ export default function ReportDetailPage() {
               </div>
               <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {report.media_assets.map((asset) => {
-                  const url = asset.asset_type === 'completion_photo'
-                    ? `/uploads/completions/${asset.file_name}`
-                    : `/uploads/reports/${asset.file_name}`;
+                  const url = resolveAssetUrl(
+                    asset.file_path && (asset.file_path.startsWith('http://') || asset.file_path.startsWith('https://'))
+                      ? asset.file_path
+                      : asset.file_name,
+                    asset.asset_type === 'completion_photo' ? 'completions' : 'reports'
+                  );
 
                   const label =
                     asset.asset_type === 'completion_photo'

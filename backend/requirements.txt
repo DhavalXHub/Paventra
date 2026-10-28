@@ -17,3 +17,7 @@ opencv-python>=4.13.0
 numpy>=1.26.0
 scikit-fuzzy>=0.4.2
 pandas>=2.0.0
+asyncpg>=0.29.0
+huggingface_hub>=0.20.0
+ultralytics>=8.2.0
+scipy>=1.11.0

@@ -31,6 +31,7 @@ from app.schemas.schemas import (
 )
 from app.services.vision.inference import detector
 from app.services.prioritization.fuzzy_engine import compute_priority, _priority_label
+from app.services.storage import storage_service
 from app.services.vision.assessment_pipeline import (
     run_automatic_assessment, derive_traffic_exposure, derive_safety_urgency,
 )
@@ -167,13 +168,15 @@ async def submit_report(
         if not validate_coordinates(latitude, longitude):
             raise HTTPException(status_code=400, detail="Invalid coordinates")
 
-    # Save file
-    upload_dir = Path(settings.UPLOAD_DIR) / "reports"
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    # Save file (hybrid: local disk for CV + persistent object storage when configured)
     safe_name = await _safe_filename(image.filename or "upload.jpg")
-    file_path = upload_dir / safe_name
-    async with aiofiles.open(file_path, "wb") as f:
-        await f.write(content)
+    accessible_url_or_path, safe_name = await storage_service.save_file(
+        content=content,
+        safe_filename=safe_name,
+        folder="reports",
+        content_type=content_type,
+    )
+    local_path = Path(settings.UPLOAD_DIR) / "reports" / safe_name
 
     # Map damage_type string to enum
     try:
@@ -218,7 +221,7 @@ async def submit_report(
     # Save media asset
     media = MediaAsset(
         report_id=report.id,
-        file_path=str(file_path),
+        file_path=accessible_url_or_path,
         file_name=safe_name,
         mime_type=content_type,
         file_size_bytes=len(content),
@@ -238,7 +241,7 @@ async def submit_report(
     await db.flush()
 
     # Run automated Computer Vision and Mamdani Fuzzy Prioritization
-    assessment_res = await run_automatic_assessment(report, str(file_path), db)
+    assessment_res = await run_automatic_assessment(report, str(local_path), db)
     await db.commit()
 
     ai_assessment = {
@@ -340,16 +343,17 @@ async def submit_additional_evidence(
         enforce_upload_size(content)
         validate_image_bytes(content)
 
-        upload_dir = Path(settings.UPLOAD_DIR) / "reports"
-        upload_dir.mkdir(parents=True, exist_ok=True)
         safe_name = await _safe_filename(image.filename or "evidence.jpg")
-        file_path = upload_dir / safe_name
-        async with aiofiles.open(file_path, "wb") as f:
-            await f.write(content)
+        accessible_url_or_path, safe_name = await storage_service.save_file(
+            content=content,
+            safe_filename=safe_name,
+            folder="reports",
+            content_type=content_type,
+        )
 
         media = MediaAsset(
             report_id=report.id,
-            file_path=str(file_path),
+            file_path=accessible_url_or_path,
             file_name=safe_name,
             mime_type=content_type,
             file_size_bytes=len(content),
@@ -1214,13 +1218,13 @@ async def submit_completion(
         content = await photo.read()
         enforce_upload_size(content)
         validate_image_bytes(content)
-        upload_dir = Path(settings.UPLOAD_DIR) / "completions"
-        upload_dir.mkdir(parents=True, exist_ok=True)
         safe_name = await _safe_filename(photo.filename or "completion.jpg")
-        file_path = upload_dir / safe_name
-        async with aiofiles.open(file_path, "wb") as f:
-            await f.write(content)
-        photo_path = str(file_path)
+        photo_path, safe_name = await storage_service.save_file(
+            content=content,
+            safe_filename=safe_name,
+            folder="completions",
+            content_type=content_type,
+        )
 
         # Save as media asset
         media = MediaAsset(

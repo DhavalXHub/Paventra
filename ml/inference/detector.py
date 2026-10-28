@@ -94,6 +94,14 @@ class RoadDamageInferenceEngine:
         for c in candidates:
             if c.exists():
                 return str(c)
+
+        try:
+            from ml.weights.download_weights import download_rdd_weights
+            downloaded = download_rdd_weights()
+            if downloaded and os.path.exists(downloaded):
+                return downloaded
+        except Exception as e:
+            logger.warning(f"Could not automatically download weights: {e}")
         return None
 
     def load_model(self) -> bool:

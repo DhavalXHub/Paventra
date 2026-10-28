@@ -1,6 +1,6 @@
 """Application configuration loaded from environment variables."""
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 
@@ -59,6 +59,12 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5174",
     ]
 
+    # Supabase Object Storage (for persistent cloud file uploads)
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_KEY: Optional[str] = None
+    SUPABASE_BUCKET_NAME: str = "paventra-uploads"
+    STORAGE_BACKEND: str = "local"  # "local" or "supabase"
+
     # Rate limiting & Proxy configuration
     RATE_LIMIT_REPORTS_PER_HOUR: int = 10
     BEHIND_TRUSTED_PROXY: bool = False
@@ -66,6 +72,22 @@ class Settings(BaseSettings):
 
     # Analytics
     ANALYTICS_EXPORT_DIR: str = "analytics_exports"
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> list[str]:
+        import json
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    return json.loads(v)
+                except Exception:
+                    pass
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        elif isinstance(v, (list, tuple)):
+            return list(v)
+        return v
 
     @field_validator("MAX_UPLOAD_SIZE_MB")
     @classmethod
