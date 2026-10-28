@@ -160,6 +160,15 @@ class ReportOut(BaseModel):
     ai_bounding_boxes: Optional[dict] = None
     ai_inference_ms: Optional[float] = None
     priority_score: Optional[float]
+    priority_label: Optional[str] = None
+    priority_explanation: Optional[dict] = None
+    assessment_status: Optional[str] = None
+    ai_model_name: Optional[str] = None
+    ai_assessed_at: Optional[datetime] = None
+    original_severity: Optional[str] = None
+    original_priority_score: Optional[float] = None
+    override_reason: Optional[str] = None
+    override_at: Optional[datetime] = None
     review_reason: Optional[str]
     created_at: datetime
     updated_at: datetime
@@ -179,10 +188,13 @@ class ReportListItem(BaseModel):
     status: str
     damage_type: str
     severity: Optional[str]
+    severity_is_estimated: bool = True
+    assessment_status: Optional[str] = None
     latitude: Optional[float]
     longitude: Optional[float]
     address_hint: Optional[str]
     priority_score: Optional[float]
+    priority_label: Optional[str] = None
     ai_confidence: Optional[float]
     created_at: datetime
     updated_at: datetime
@@ -202,6 +214,13 @@ class StatusUpdateRequest(BaseModel):
     status: str
     severity: Optional[str] = None
     reason: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class AssessmentOverrideRequest(BaseModel):
+    severity: str
+    damage_type: Optional[str] = None
+    reason: str
     notes: Optional[str] = None
 
 

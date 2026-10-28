@@ -11,7 +11,7 @@ from typing import Optional
 import aiofiles
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, and_, case
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
@@ -27,10 +27,13 @@ from app.models.audit import AuditEvent
 from app.schemas.schemas import (
     ReportOut, ReportListItem, ReportListResponse, StatusUpdateRequest,
     AssignRequest, SubmitConfirmation, CompletionRequest,
-    ReportClaimRequest, ReportClaimResponse,
+    ReportClaimRequest, ReportClaimResponse, AssessmentOverrideRequest,
 )
 from app.services.vision.inference import detector
-from app.services.prioritization.fuzzy_engine import compute_priority
+from app.services.prioritization.fuzzy_engine import compute_priority, _priority_label
+from app.services.vision.assessment_pipeline import (
+    run_automatic_assessment, derive_traffic_exposure, derive_safety_urgency,
+)
 from app.services.notifications.service import create_notification
 from app.services.duplicate_detection.detector import find_duplicate_candidates as _find_dupes
 from app.services.geospatial.distance import validate_coordinates, haversine_distance
@@ -234,107 +237,23 @@ async def submit_report(
     db.add(history)
     await db.flush()
 
-    # Run AI inference synchronously (fast) if model available
-    ai_assessment = None
-    sev_numeric = None
-    if detector.is_available():
-        result = detector.infer(str(file_path))
-        if result.model_available and not result.error and result.best_detection:
-            best = result.best_detection
-            report.ai_confidence = best.confidence
-            report.ai_damage_type = best.damage_type
-            report.ai_inference_ms = result.inference_ms
-
-            sev_obj = result.severity_assessment
-            if sev_obj:
-                sev_map = {
-                    "low": SeverityLevel.LOW,
-                    "moderate": SeverityLevel.MODERATE,
-                    "high": SeverityLevel.HIGH,
-                    "critical": SeverityLevel.CRITICAL,
-                }
-                report.severity = sev_map.get(sev_obj.level, SeverityLevel.MODERATE)
-                report.severity_is_estimated = True
-                sev_numeric = sev_obj.score
-            elif best.confidence >= 0.75:
-                report.severity = SeverityLevel.HIGH
-                report.severity_is_estimated = True
-            else:
-                report.severity = SeverityLevel.MODERATE
-                report.severity_is_estimated = True
-
-            report.ai_bounding_boxes = {
-                "detections": [
-                    {"class_code": d.class_code, "damage_type": d.damage_type,
-                     "confidence": d.confidence, "bbox": d.bbox_xyxy}
-                    for d in result.detections
-                ],
-                "severity_estimation": {
-                    "level": sev_obj.level,
-                    "score": sev_obj.score,
-                    "method": sev_obj.method,
-                    "features": sev_obj.features,
-                    "confidence": sev_obj.confidence,
-                    "uncertainty": sev_obj.uncertainty,
-                    "review_required": sev_obj.review_required,
-                    "provisional": sev_obj.provisional,
-                    "disclaimer": sev_obj.disclaimer,
-                } if sev_obj else None,
-            }
-            dtype_map = {"pothole": DamageType.POTHOLE, "crack": DamageType.CRACK}
-            report.damage_type = dtype_map.get(best.damage_type, dt_enum)
-            ai_assessment = {
-                "damage_type": best.damage_type,
-                "confidence": best.confidence,
-                "severity_estimated": report.severity.value if report.severity else None,
-                "severity_score": sev_obj.score if sev_obj else None,
-                "severity_method": sev_obj.method if sev_obj else None,
-                "review_required": sev_obj.review_required if sev_obj else False,
-                "model_available": True,
-                "disclaimer": sev_obj.disclaimer if sev_obj else (
-                    "This is an AI-estimated provisional assessment. Confidence and severity "
-                    "are predictions only and must be verified by a coordinator."
-                ),
-            }
-        elif not result.model_available:
-            ai_assessment = {"model_available": False, "message": result.error}
-    else:
-        ai_assessment = {
-            "model_available": False,
-            "message": "AI model not configured. Report will be manually reviewed.",
-        }
-
-    # Compute fuzzy priority
-    if report.severity:
-        days_unresolved = 0.0
-        try:
-            pr = compute_priority(
-                severity_label=report.severity.value,
-                time_unresolved_days=days_unresolved,
-                severity_numeric=sev_numeric,
-            )
-            report.priority_score = pr.priority_score
-            report.priority_explanation = {
-                "label": pr.priority_label,
-                "factors": pr.top_contributing_factors,
-                "engine": pr.engine_used,
-            }
-            assessment = FuzzyPriorityAssessment(
-                report_id=report.id,
-                severity_input=pr.inputs["severity"],
-                traffic_exposure_input=pr.inputs["traffic_exposure"],
-                time_unresolved_days=pr.inputs["time_unresolved_days"],
-                safety_urgency_input=pr.inputs["safety_urgency"],
-                priority_score=pr.priority_score,
-                priority_label=pr.priority_label,
-                top_contributing_factors=pr.top_contributing_factors,
-                baseline_score=pr.baseline_score,
-            )
-            db.add(assessment)
-        except Exception as exc:
-            logger.warning(f"Fuzzy priority computation failed: {exc}")
-
+    # Run automated Computer Vision and Mamdani Fuzzy Prioritization
+    assessment_res = await run_automatic_assessment(report, str(file_path), db)
     await db.commit()
+
+    ai_assessment = {
+        "status": report.assessment_status,
+        "damage_type": report.damage_type.value if report.damage_type else None,
+        "confidence": report.ai_confidence,
+        "severity_estimated": report.severity.value if report.severity else None,
+        "priority_score": report.priority_score,
+        "priority_label": (report.priority_explanation or {}).get("label"),
+        "model_available": detector.is_available(),
+        "disclaimer": (
+            "Provisional 2D image-derived estimate based on visible surface distress area and geometry. "
+            "Ordinary RGB photographs cannot measure true volumetric cavity depth or pavement sub-base integrity."
+        ),
+    }
 
     # Notification for submitter
     if current_user:
@@ -556,10 +475,18 @@ async def list_reports(
     severity: Optional[str] = Query(None),
     damage_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    include_test_artifacts: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_coordinator),
 ):
     q = select(Report)
+    if not include_test_artifacts and not search:
+        q = q.where(
+            or_(
+                Report.assessment_status != "AUTOMATED_TEST_ARTIFACT",
+                Report.assessment_status.is_(None),
+            )
+        )
     if status:
         q = q.where(Report.status == status)
     if source:
@@ -570,23 +497,94 @@ async def list_reports(
         q = q.where(Report.damage_type == damage_type)
     if search:
         q = q.where(
-            or_(Report.public_ref.ilike(f"%{search}%"), Report.description.ilike(f"%{search}%"))
+            or_(Report.public_ref.ilike(f"%{search}%"), Report.description.ilike(f"%{search}%"),
+                Report.submitter_email.ilike(f"%{search}%"))
         )
 
     count_q = select(func.count()).select_from(q.subquery())
     total = (await db.execute(count_q)).scalar() or 0
 
-    q = q.order_by(Report.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+    # ── Sorting strategy ────────────────────────────────────────────────────────
+    # Bucket 0 (sort key 0): Actionable + has a valid priority score  → rank by score desc
+    # Bucket 1 (sort key 1): Actionable + no valid score              → newest first
+    # Bucket 2 (sort key 2): Non-actionable (RESOLVED / REJECTED)     → newest first
+    #
+    # This ensures:
+    #   • Assessed high-priority hazards appear at the top.
+    #   • Newly submitted genuine reports (not yet assessed) appear immediately
+    #     below scored reports, not buried at position 400+.
+    #   • Resolved/rejected reports stay at the bottom.
+    # ────────────────────────────────────────────────────────────────────────────
+    is_non_actionable = case(
+        (Report.status.in_([ReportStatus.RESOLVED, ReportStatus.REJECTED]), 2),
+        else_=case(
+            (Report.priority_score.isnot(None), 0),
+            else_=1,
+        ),
+    )
+    q = q.order_by(
+        is_non_actionable.asc(),
+        # Within bucket 0 (scored): highest score first, deterministic tie-break
+        case((is_non_actionable == 0, Report.priority_score), else_=None).desc().nulls_last(),
+        # Within all buckets: newest first as secondary sort
+        Report.created_at.desc(),
+        Report.public_ref.asc(),
+    ).offset((page - 1) * page_size).limit(page_size)
+
     rows = (await db.execute(q)).scalars().all()
     pages = max(1, (total + page_size - 1) // page_size)
 
+    items = []
+    for r in rows:
+        item = ReportListItem.model_validate(r)
+        if r.priority_explanation and isinstance(r.priority_explanation, dict) and "label" in r.priority_explanation:
+            item.priority_label = r.priority_explanation["label"]
+        elif r.priority_score is not None:
+            item.priority_label = _priority_label(r.priority_score)
+        items.append(item)
+
     return ReportListResponse(
-        items=[ReportListItem.model_validate(r) for r in rows],
+        items=items,
         total=total,
         page=page,
         page_size=page_size,
         pages=pages,
     )
+
+
+# ─── Coordinator: recent submissions ─────────────────────────────────────────
+
+@router.get("/recent", response_model=list[ReportListItem])
+async def list_recent_reports(
+    limit: int = Query(5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_coordinator),
+):
+    """
+    Returns the newest citizen submissions, ordered strictly by created_at desc.
+    Ensures newly submitted reports are immediately prominent in the coordinator UI.
+    """
+    q = (
+        select(Report)
+        .where(
+            or_(
+                Report.assessment_status != "AUTOMATED_TEST_ARTIFACT",
+                Report.assessment_status.is_(None),
+            )
+        )
+        .order_by(Report.created_at.desc(), Report.public_ref.asc())
+        .limit(limit)
+    )
+    rows = (await db.execute(q)).scalars().all()
+    items = []
+    for r in rows:
+        item = ReportListItem.model_validate(r)
+        if r.priority_explanation and isinstance(r.priority_explanation, dict) and "label" in r.priority_explanation:
+            item.priority_label = r.priority_explanation["label"]
+        elif r.priority_score is not None:
+            item.priority_label = _priority_label(r.priority_score)
+        items.append(item)
+    return items
 
 
 # ─── Coordinator: report detail ───────────────────────────────────────────────
@@ -605,7 +603,7 @@ async def get_report(
             selectinload(Report.assignment).selectinload(RepairAssignment.team),
             selectinload(Report.priority_assessment),
         )
-        .where(Report.id == report_id)
+        .where(or_(Report.id == report_id, Report.public_ref == report_id.upper()))
     )
     report = result.scalar_one_or_none()
     if not report:
@@ -614,6 +612,10 @@ async def get_report(
     out = ReportOut.model_validate(report)
     if report.assignment and report.assignment.team:
         out.assignment.team_name = report.assignment.team.name
+    if report.priority_explanation and isinstance(report.priority_explanation, dict) and "label" in report.priority_explanation:
+        out.priority_label = report.priority_explanation["label"]
+    elif report.priority_score is not None:
+        out.priority_label = _priority_label(report.priority_score)
     return out
 
 
@@ -626,7 +628,7 @@ async def update_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_coordinator),
 ):
-    result = await db.execute(select(Report).where(Report.id == report_id))
+    result = await db.execute(select(Report).where(or_(Report.id == report_id, Report.public_ref == report_id.upper())))
     report = result.scalar_one_or_none()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -657,8 +659,14 @@ async def update_status(
 
     if body.severity:
         try:
-            report.severity = SeverityLevel(body.severity)
+            if report.original_severity is None:
+                report.original_severity = report.severity
+            if report.original_priority_score is None:
+                report.original_priority_score = report.priority_score
+            report.severity = SeverityLevel(body.severity.lower())
             report.severity_is_estimated = False
+            report.assessment_status = "OVERRIDDEN"
+            report.override_reason = body.notes or body.reason or "Verified severity confirmation"
             created = report.created_at
             if created.tzinfo is None:
                 created = created.replace(tzinfo=timezone.utc)
@@ -666,13 +674,18 @@ async def update_status(
                 0.0,
                 (datetime.now(timezone.utc) - created).total_seconds() / 86400.0,
             )
+            traffic_score, _ = derive_traffic_exposure(report.address_hint)
+            safety_score, _ = derive_safety_urgency(report.severity, report.damage_type, report.address_hint)
             pr = compute_priority(
                 severity_label=report.severity.value,
+                traffic_exposure=traffic_score,
                 time_unresolved_days=days_unresolved,
+                safety_urgency=safety_score,
             )
             report.priority_score = pr.priority_score
             report.priority_explanation = {
                 "label": pr.priority_label,
+                "score": pr.priority_score,
                 "factors": pr.top_contributing_factors,
                 "engine": pr.engine_used,
             }
@@ -718,6 +731,237 @@ async def update_status(
     return {"public_ref": report.public_ref, "status": new_status.value}
 
 
+# ─── Coordinator: human override of assessment ───────────────────────────────
+
+@router.post("/{report_id}/override", response_model=ReportOut)
+async def override_assessment(
+    report_id: str,
+    body: AssessmentOverrideRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_coordinator),
+):
+    result = await db.execute(
+        select(Report)
+        .options(
+            selectinload(Report.media_assets),
+            selectinload(Report.status_history),
+            selectinload(Report.assignment).selectinload(RepairAssignment.team),
+            selectinload(Report.priority_assessment),
+        )
+        .where(or_(Report.id == report_id, Report.public_ref == report_id.upper()))
+    )
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    try:
+        new_sev = SeverityLevel(body.severity.lower())
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid severity level: {body.severity}")
+
+    old_sev = report.severity
+    old_priority = report.priority_score
+
+    # Preserve original AI assessment values
+    if report.original_severity is None:
+        report.original_severity = old_sev
+    if report.original_priority_score is None:
+        report.original_priority_score = old_priority
+
+    # Apply override
+    report.severity = new_sev
+    report.severity_is_estimated = False
+    report.assessment_status = "OVERRIDDEN"
+    report.override_reason = body.reason
+    report.override_by_id = current_user.id
+    report.override_at = datetime.now(timezone.utc)
+
+    if body.damage_type:
+        try:
+            report.damage_type = DamageType(body.damage_type.lower())
+        except ValueError:
+            pass
+
+    # Recalculate priority based on human-verified severity and actual elapsed days
+    created = report.created_at
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    days_unresolved = max(0.0, (datetime.now(timezone.utc) - created).total_seconds() / 86400.0)
+
+    traffic_score, traffic_prov = derive_traffic_exposure(report.address_hint)
+    safety_score, safety_prov = derive_safety_urgency(report.severity, report.damage_type, report.address_hint)
+
+    pr = compute_priority(
+        severity_label=report.severity.value,
+        traffic_exposure=traffic_score,
+        time_unresolved_days=days_unresolved,
+        safety_urgency=safety_score,
+    )
+
+    report.priority_score = pr.priority_score
+    report.priority_explanation = {
+        "label": pr.priority_label,
+        "score": pr.priority_score,
+        "factors": pr.top_contributing_factors,
+        "engine": pr.engine_used,
+        "inputs": pr.inputs,
+        "baseline_score": pr.baseline_score,
+        "override": {
+            "overridden_by": current_user.email,
+            "overridden_at": report.override_at.isoformat(),
+            "reason": body.reason,
+            "notes": body.notes,
+            "original_severity": report.original_severity.value if report.original_severity else None,
+            "original_priority_score": report.original_priority_score,
+        },
+    }
+
+    # Record AuditEvent
+    audit = AuditEvent(
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        action="assessment_override",
+        resource_type="report",
+        resource_id=report.id,
+        details={
+            "from_severity": old_sev.value if old_sev else None,
+            "to_severity": new_sev.value,
+            "from_priority": old_priority,
+            "to_priority": pr.priority_score,
+            "reason": body.reason,
+        },
+    )
+    db.add(audit)
+    await db.commit()
+    await db.refresh(report)
+
+    out = ReportOut.model_validate(report)
+    out.priority_label = pr.priority_label
+    return out
+
+
+# ─── Coordinator: backfill unassessed reports ────────────────────────────────
+
+@router.post("/backfill-assessments", response_model=dict)
+async def backfill_assessments(
+    limit: int = Query(500, ge=1, le=1000),
+    dry_run: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_coordinator),
+):
+    """
+    Controlled, idempotent backfill for existing unassessed reports.
+    Executes automatic YOLO detection and Mamdani FIS on reports with photos,
+    or flags them with honest NO_IMAGE / NO_DETECTIONS states.
+    Preserves existing user reports, never fabricates evidence, never overwrites
+    human overrides, and records an audit trail.
+    Supports dry_run=True to preview counts without applying any changes.
+    """
+    res = await db.execute(
+        select(Report)
+        .options(selectinload(Report.media_assets))
+        .where(
+            and_(
+                or_(
+                    Report.assessment_status.is_(None),
+                    Report.assessment_status == "PENDING",
+                ),
+                # Never overwrite human overrides
+                Report.assessment_status != "OVERRIDDEN",
+            )
+        )
+        .limit(limit)
+    )
+    reports_to_backfill = res.scalars().all()
+
+    if dry_run:
+        with_images = 0
+        without_images = 0
+        for rep in reports_to_backfill:
+            has_valid_img = False
+            for asset in rep.media_assets:
+                cand = Path(settings.upload_path) / "reports" / asset.file_name
+                if cand.exists() and cand.stat().st_size > 0:
+                    has_valid_img = True
+                    break
+                elif Path(asset.file_path).exists() and Path(asset.file_path).stat().st_size > 0:
+                    has_valid_img = True
+                    break
+            if has_valid_img:
+                with_images += 1
+            else:
+                without_images += 1
+        return {
+            "status": "preview",
+            "dry_run": True,
+            "total_eligible": len(reports_to_backfill),
+            "with_images_to_assess": with_images,
+            "missing_or_no_image": without_images,
+            "message": f"Preview: {len(reports_to_backfill)} eligible reports ({with_images} with valid photo, {without_images} with missing/no photo). No changes were written.",
+        }
+
+    assessed_count = 0
+    no_image_count = 0
+    no_detections_count = 0
+    failed_count = 0
+
+    for rep in reports_to_backfill:
+        primary_asset = None
+        for asset in rep.media_assets:
+            if asset.asset_type in ("report_photo", "initial"):
+                primary_asset = asset
+                break
+        if not primary_asset and rep.media_assets:
+            primary_asset = rep.media_assets[0]
+
+        img_path = None
+        if primary_asset:
+            candidate = Path(settings.upload_path) / "reports" / primary_asset.file_name
+            if candidate.exists():
+                img_path = str(candidate)
+            elif Path(primary_asset.file_path).exists():
+                img_path = primary_asset.file_path
+
+        outcome = await run_automatic_assessment(rep, img_path, db)
+        status = outcome.get("status")
+        if status in ("COMPLETED", "REVIEW_REQUIRED"):
+            assessed_count += 1
+        elif status == "NO_IMAGE":
+            no_image_count += 1
+        elif status == "NO_DETECTIONS":
+            no_detections_count += 1
+        else:
+            failed_count += 1
+
+    audit = AuditEvent(
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        action="backfill_assessments",
+        resource_type="system",
+        resource_id="reports",
+        details={
+            "total_processed": len(reports_to_backfill),
+            "assessed": assessed_count,
+            "no_image": no_image_count,
+            "no_detections": no_detections_count,
+            "failed": failed_count,
+            "dry_run": False,
+        },
+    )
+    db.add(audit)
+    await db.commit()
+
+    return {
+        "status": "success",
+        "dry_run": False,
+        "total_processed": len(reports_to_backfill),
+        "assessed": assessed_count,
+        "no_image": no_image_count,
+        "no_detections": no_detections_count,
+        "failed": failed_count,
+    }
+
+
 # ─── Coordinator: assign team ─────────────────────────────────────────────────
 
 @router.post("/{report_id}/assign", response_model=dict)
@@ -727,7 +971,7 @@ async def assign_report(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_coordinator),
 ):
-    result = await db.execute(select(Report).where(Report.id == report_id))
+    result = await db.execute(select(Report).where(or_(Report.id == report_id, Report.public_ref == report_id.upper())))
     report = result.scalar_one_or_none()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -826,7 +1070,7 @@ async def get_duplicate_candidates(
     """Return potential duplicate reports for coordinator review."""
     result = await db.execute(
         select(Report)
-        .where(Report.id == report_id)
+        .where(or_(Report.id == report_id, Report.public_ref == report_id.upper()))
     )
     report = result.scalar_one_or_none()
     if not report:
@@ -894,24 +1138,26 @@ async def link_duplicate(
         raise HTTPException(status_code=400, detail="duplicate_id required")
 
     # Verify both exist
-    r1 = await db.execute(select(Report).where(Report.id == report_id))
-    r2 = await db.execute(select(Report).where(Report.id == duplicate_id))
-    if not r1.scalar_one_or_none() or not r2.scalar_one_or_none():
+    r1 = await db.execute(select(Report).where(or_(Report.id == report_id, Report.public_ref == report_id.upper())))
+    r2 = await db.execute(select(Report).where(or_(Report.id == duplicate_id, Report.public_ref == duplicate_id.upper())))
+    rep1 = r1.scalar_one_or_none()
+    rep2 = r2.scalar_one_or_none()
+    if not rep1 or not rep2:
         raise HTTPException(status_code=404, detail="Report not found")
 
     # Check not already linked
     existing = await db.execute(
         select(DuplicateLink).where(
-            DuplicateLink.primary_report_id == report_id,
-            DuplicateLink.duplicate_report_id == duplicate_id,
+            DuplicateLink.primary_report_id == rep1.id,
+            DuplicateLink.duplicate_report_id == rep2.id,
         )
     )
     if existing.scalar_one_or_none():
         return {"status": "already_linked"}
 
     link = DuplicateLink(
-        primary_report_id=report_id,
-        duplicate_report_id=duplicate_id,
+        primary_report_id=rep1.id,
+        duplicate_report_id=rep2.id,
         confirmed=True,
         confirmed_by_id=current_user.id,
     )
@@ -944,7 +1190,7 @@ async def submit_completion(
     result = await db.execute(
         select(Report)
         .options(selectinload(Report.assignment))
-        .where(Report.id == report_id)
+        .where(or_(Report.id == report_id, Report.public_ref == report_id.upper()))
     )
     report = result.scalar_one_or_none()
     if not report:

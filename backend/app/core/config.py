@@ -76,7 +76,11 @@ class Settings(BaseSettings):
 
     @property
     def upload_path(self) -> Path:
-        return Path(self.UPLOAD_DIR)
+        base = Path(self.UPLOAD_DIR)
+        if not base.is_absolute():
+            backend_root = Path(__file__).resolve().parent.parent.parent
+            return (backend_root / base).resolve()
+        return base.resolve()
 
     @property
     def max_upload_bytes(self) -> int:

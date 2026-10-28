@@ -35,25 +35,43 @@ const queryClient = new QueryClient({
   },
 });
 
+function FullScreenLoading({ message = 'Loading Paventra...' }: { message?: string }) {
+  return (
+    <div className="min-h-screen bg-[#faf9f6] flex flex-col items-center justify-center p-4">
+      <div className="w-8 h-8 border-3 border-stone-200 border-t-[#14462a] rounded-full animate-spin mb-3" />
+      <p className="text-xs font-medium text-stone-600 tracking-wide">{message}</p>
+    </div>
+  );
+}
+
 function RequireCoordinator({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isCoordinator } = useAuth();
+  const { isAuthenticated, isCoordinator, isInitializing } = useAuth();
   const location = useLocation();
+  if (isInitializing) {
+    return <FullScreenLoading message="Verifying coordinator authorization..." />;
+  }
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (!isCoordinator) return <Navigate to="/report" replace />;
+  if (!isCoordinator) return <Navigate to="/my-reports" replace />;
   return <>{children}</>;
 }
 
 function RequireTeam({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isRepairTeam, isCoordinator } = useAuth();
+  const { isAuthenticated, isRepairTeam, isCoordinator, isInitializing } = useAuth();
   const location = useLocation();
+  if (isInitializing) {
+    return <FullScreenLoading message="Verifying team authorization..." />;
+  }
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (!isRepairTeam && !isCoordinator) return <Navigate to="/report" replace />;
+  if (!isRepairTeam && !isCoordinator) return <Navigate to="/my-reports" replace />;
   return <>{children}</>;
 }
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isInitializing } = useAuth();
   const location = useLocation();
+  if (isInitializing) {
+    return <FullScreenLoading message="Verifying session..." />;
+  }
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   return <>{children}</>;
 }

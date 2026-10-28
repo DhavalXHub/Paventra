@@ -92,6 +92,13 @@ export interface Report {
   damage_type: DamageType;
   severity: SeverityLevel | null;
   severity_is_estimated: boolean;
+  assessment_status?: string | null;
+  ai_model_name?: string | null;
+  ai_assessed_at?: string | null;
+  original_severity?: SeverityLevel | null;
+  original_priority_score?: number | null;
+  override_reason?: string | null;
+  override_at?: string | null;
   latitude: number | null;
   longitude: number | null;
   location_source: LocationSource;
@@ -102,6 +109,8 @@ export interface Report {
   ai_bounding_boxes?: Record<string, any> | null;
   ai_inference_ms?: number | null;
   priority_score: number | null;
+  priority_label?: string | null;
+  priority_explanation?: Record<string, any> | null;
   review_reason: string | null;
   created_at: string;
   updated_at: string;
@@ -119,10 +128,13 @@ export interface ReportListItem {
   status: ReportStatus;
   damage_type: DamageType;
   severity: SeverityLevel | null;
+  severity_is_estimated?: boolean;
+  assessment_status?: string | null;
   latitude: number | null;
   longitude: number | null;
   address_hint: string | null;
   priority_score: number | null;
+  priority_label?: string | null;
   ai_confidence: number | null;
   created_at: string;
   updated_at: string;

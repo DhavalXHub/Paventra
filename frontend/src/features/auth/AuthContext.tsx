@@ -1,15 +1,18 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { User, AuthTokens } from '../../types';
 import api from '../../lib/api';
+
 interface AuthState {
   user: User | null;
   token: string | null;
   role: string | null;
+  isInitializing: boolean;
 }
 
 interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   loginWithGoogle: (payload: string | { credential: string; link_existing?: boolean; password_for_linking?: string }) => Promise<User>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -20,13 +23,20 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>(() => ({
-    token: localStorage.getItem('access_token'),
-    role: localStorage.getItem('user_role'),
-    user: null,
-  }));
+  const queryClient = useQueryClient();
 
-  const login = useCallback(async (email: string, password: string) => {
+  const [state, setState] = useState<AuthState>(() => {
+    const token = localStorage.getItem('access_token');
+    const role = localStorage.getItem('user_role');
+    return {
+      token,
+      role,
+      user: null,
+      isInitializing: !!token,
+    };
+  });
+
+  const login = useCallback(async (email: string, password: string): Promise<User> => {
     const res = await api.post<AuthTokens>('/auth/login', { email, password });
     const { access_token, refresh_token, role } = res.data;
     localStorage.setItem('access_token', access_token);
@@ -36,7 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const meRes = await api.get<User>('/auth/me', {
       headers: { Authorization: `Bearer ${access_token}` },
     });
-    setState({ token: access_token, role, user: meRes.data });
+    setState({ token: access_token, role, user: meRes.data, isInitializing: false });
+    return meRes.data;
   }, []);
 
   const loginWithGoogle = useCallback(
@@ -51,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const meRes = await api.get<User>('/auth/me', {
         headers: { Authorization: `Bearer ${access_token}` },
       });
-      setState({ token: access_token, role, user: meRes.data });
+      setState({ token: access_token, role, user: meRes.data, isInitializing: false });
       return meRes.data;
     },
     []
@@ -61,29 +72,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user_role');
-    setState({ token: null, role: null, user: null });
-  }, []);
+    // Session isolation: purge cached queries so no previous user data persists in memory
+    queryClient.clear();
+    setState({ token: null, role: null, user: null, isInitializing: false });
+  }, [queryClient]);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
-    if (!token) return;
+    if (!token) {
+      setState((prev) => ({ ...prev, isInitializing: false }));
+      return;
+    }
     api.get<User>('/auth/me')
       .then((res) => {
-        setState((prev) => ({
-          ...prev,
+        setState({
           user: res.data,
           role: res.data.role,
           token,
-        }));
+          isInitializing: false,
+        });
         localStorage.setItem('user_role', res.data.role);
       })
       .catch(() => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user_role');
-        setState({ token: null, role: null, user: null });
+        queryClient.clear();
+        setState({ token: null, role: null, user: null, isInitializing: false });
       });
-  }, []);
+  }, [queryClient]);
+
+  const roleLower = (state.role || '').toLowerCase();
+  const isCoordinator = roleLower === 'coordinator' || roleLower === 'admin';
+  const isRepairTeam = roleLower === 'repair_team';
 
   return (
     <AuthContext.Provider
@@ -93,8 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithGoogle,
         logout,
         isAuthenticated: !!state.token,
-        isCoordinator: state.role === 'coordinator' || state.role === 'admin',
-        isRepairTeam: state.role === 'repair_team',
+        isCoordinator,
+        isRepairTeam,
       }}
     >
       {children}

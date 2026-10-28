@@ -16,7 +16,6 @@ export default function ReportDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [actionStatus, setActionStatus] = useState('');
-  const [verifiedSeverity, setVerifiedSeverity] = useState('');
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [teamId, setTeamId] = useState('');
@@ -27,6 +26,13 @@ export default function ReportDetailPage() {
   const [completionPhoto, setCompletionPhoto] = useState<File | null>(null);
   const completionFileRef = useRef<HTMLInputElement>(null);
   const [showDuplicates, setShowDuplicates] = useState(false);
+
+  // Human Override State
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [overrideSeverity, setOverrideSeverity] = useState<string>('moderate');
+  const [overrideDamageType, setOverrideDamageType] = useState<string>('');
+  const [overrideReason, setOverrideReason] = useState<string>('');
+  const [overrideNotes, setOverrideNotes] = useState<string>('');
 
   const { data: report, isLoading } = useQuery<Report>({
     queryKey: ['report', id],
@@ -95,19 +101,35 @@ export default function ReportDetailPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ status, severity, reason, notes }: { status: string; severity?: string; reason?: string; notes?: string }) =>
-      api.patch(`/reports/${id}/status`, { status, severity, reason, notes }),
+    mutationFn: ({ status, reason, notes }: { status: string; reason?: string; notes?: string }) =>
+      api.patch(`/reports/${id}/status`, { status, reason, notes }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['report', id] });
       qc.invalidateQueries({ queryKey: ['reports'] });
       setActionSuccess('Status updated successfully');
       setActionStatus('');
-      setVerifiedSeverity('');
       setReason('');
       setNotes('');
     },
     onError: (err: { response?: { data?: { detail?: string } } }) => {
       setActionError(err?.response?.data?.detail ?? 'Failed to update status');
+    },
+  });
+
+  const overrideMutation = useMutation({
+    mutationFn: ({ severity, damage_type, reason, notes }: { severity: string; damage_type?: string; reason: string; notes?: string }) =>
+      api.post(`/reports/${id}/override`, { severity, damage_type: damage_type || undefined, reason, notes }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['report', id] });
+      qc.invalidateQueries({ queryKey: ['reports'] });
+      qc.invalidateQueries({ queryKey: ['audit', id] });
+      setActionSuccess('Assessment override recorded successfully with audit trail.');
+      setShowOverrideModal(false);
+      setOverrideReason('');
+      setOverrideNotes('');
+    },
+    onError: (err: { response?: { data?: { detail?: string } } }) => {
+      setActionError(err?.response?.data?.detail ?? 'Failed to override assessment');
     },
   });
 
@@ -241,91 +263,260 @@ export default function ReportDetailPage() {
             </div>
           </Card>
 
-          {/* AI Assessment */}
-          {(report.ai_confidence !== null || report.ai_damage_type) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Computer Vision Assessment</CardTitle>
+          {/* AI Assessment & Prioritization */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between w-full">
+                <CardTitle>Automatic Assessment & Prioritization</CardTitle>
                 <div className="flex items-center gap-2">
+                  {report.assessment_status === 'OVERRIDDEN' ? (
+                    <span className="text-[11px] bg-purple-100 text-purple-800 font-semibold px-2 py-0.5 rounded border border-purple-200">
+                      Human Overridden
+                    </span>
+                  ) : report.assessment_status === 'COMPLETED' ? (
+                    <span className="text-[11px] bg-green-100 text-green-800 font-semibold px-2 py-0.5 rounded border border-green-200">
+                      AI Assessed
+                    </span>
+                  ) : report.assessment_status === 'REVIEW_REQUIRED' ? (
+                    <span className="text-[11px] bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded border border-amber-200">
+                      Review Required
+                    </span>
+                  ) : report.assessment_status === 'NO_DETECTIONS' ? (
+                    <span className="text-[11px] bg-slate-100 text-slate-800 font-semibold px-2 py-0.5 rounded border border-slate-200">
+                      No Distress Detected
+                    </span>
+                  ) : report.assessment_status === 'NO_IMAGE' ? (
+                    <span className="text-[11px] bg-gray-100 text-gray-700 font-semibold px-2 py-0.5 rounded border border-gray-200">
+                      No Photo Available
+                    </span>
+                  ) : (
+                    <span className="text-[11px] bg-yellow-100 text-yellow-800 font-semibold px-2 py-0.5 rounded border border-yellow-200">
+                      Pending Assessment
+                    </span>
+                  )}
                   {report.ai_inference_ms && (
                     <span className="text-[11px] text-gray-500 font-mono bg-gray-100 px-1.5 py-0.5 rounded">
                       {Math.round(report.ai_inference_ms)}ms
                     </span>
                   )}
-                  <span className="text-xs text-amber-600 flex items-center gap-1 font-medium">
-                    <AlertTriangle className="w-3 h-3" /> Provisional
-                  </span>
                 </div>
-              </CardHeader>
-              <div className="space-y-3 text-sm">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs text-gray-500">Detected distress</p>
-                    <p className="font-medium text-gray-900 capitalize">{report.ai_damage_type ?? '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Model confidence</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <div className="flex-1 h-1.5 bg-gray-200 rounded-full">
-                        <div
-                          className="h-1.5 bg-accent rounded-full"
-                          style={{ width: `${Math.round((report.ai_confidence ?? 0) * 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-mono font-medium text-gray-700">
-                        {Math.round((report.ai_confidence ?? 0) * 100)}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
+              </div>
+            </CardHeader>
 
-                {/* Severity Estimation Details */}
-                {report.ai_bounding_boxes?.severity_estimation && (
-                  <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-md text-xs space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-gray-800">
-                        Severity Estimate:{' '}
-                        <span className="text-accent uppercase font-bold">
-                          {report.ai_bounding_boxes.severity_estimation.level}
-                        </span>{' '}
-                        ({report.ai_bounding_boxes.severity_estimation.score}/10)
-                      </span>
-                      {report.ai_bounding_boxes.severity_estimation.review_required && (
-                        <span className="text-[10px] bg-amber-100 text-amber-800 font-medium px-1.5 py-0.5 rounded">
-                          Review Required
-                        </span>
-                      )}
+            <div className="space-y-4 text-sm">
+              {/* Human Override Banner if active */}
+              {report.assessment_status === 'OVERRIDDEN' && (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-md text-xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-purple-900">Coordinator Human Override Applied</span>
+                    {report.override_at && (
+                      <span className="text-purple-600 text-[11px]">{formatDateTime(report.override_at)}</span>
+                    )}
+                  </div>
+                  <p className="text-purple-800">
+                    <strong>Reason:</strong> {report.override_reason}
+                  </p>
+                  <p className="text-purple-600 text-[11px]">
+                    Original AI assessment: Severity {report.original_severity ?? '—'} · Priority Score {report.original_priority_score?.toFixed(0) ?? '—'}
+                  </p>
+                </div>
+              )}
+
+              {/* Notice for No Image or No Detections */}
+              {report.assessment_status === 'NO_IMAGE' && (
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded-md text-xs text-gray-600">
+                  <p className="font-semibold text-gray-800">No Photo Attached</p>
+                  <p className="mt-0.5">This report was submitted without an image. Computer vision severity estimation is unavailable. Assessment requires physical coordinator review.</p>
+                </div>
+              )}
+
+              {report.assessment_status === 'NO_DETECTIONS' && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-700">
+                  <p className="font-semibold text-slate-900">No Road Distress Detected</p>
+                  <p className="mt-0.5">The YOLO model processed the photo but found no defects meeting the confidence threshold (&ge; 0.40). Coordinator review is required.</p>
+                </div>
+              )}
+
+              {/* Model & Severity Metrics */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50 p-3 rounded-md text-xs">
+                <div>
+                  <p className="text-gray-500">Reported Category</p>
+                  <p className="font-semibold text-gray-900 capitalize mt-0.5">{report.damage_type.replace(/_/g, ' ')}</p>
+                  <p className="text-[10px] text-blue-600 font-medium">(citizen reported)</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">AI Assessment</p>
+                  {report.ai_damage_type && report.assessment_status !== 'NO_DETECTIONS' ? (
+                    <div className="mt-0.5">
+                      <p className="font-semibold text-gray-900 capitalize">{report.ai_damage_type.replace(/_/g, ' ')}</p>
+                      <p className="text-[10px] text-green-600 font-medium">
+                        {report.ai_confidence !== null ? `${Math.round(report.ai_confidence * 100)}% conf.` : '(AI detected)'}
+                      </p>
                     </div>
-                    {report.ai_bounding_boxes.severity_estimation.features && (
-                      <div className="grid grid-cols-2 gap-2 text-gray-600 text-[11px] pt-1">
-                        <div>
-                          Footprint area:{' '}
-                          <span className="font-mono font-medium text-gray-900">
-                            {report.ai_bounding_boxes.severity_estimation.features.visible_area_percent}%
-                          </span>
-                        </div>
-                        <div>
-                          Elongation:{' '}
-                          <span className="font-mono font-medium text-gray-900">
-                            {report.ai_bounding_boxes.severity_estimation.features.max_aspect_ratio}x
-                          </span>
-                        </div>
+                  ) : report.assessment_status === 'NO_DETECTIONS' ? (
+                    <div className="mt-0.5">
+                      <p className="font-semibold text-slate-800">No qualifying detection</p>
+                      <p className="text-[10px] text-slate-500 font-medium">(&lt; 35% threshold)</p>
+                    </div>
+                  ) : (
+                    <div className="mt-0.5">
+                      <p className="font-semibold text-amber-700">Pending review</p>
+                      <p className="text-[10px] text-amber-600">Awaiting inference</p>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="text-gray-500">Severity Assessment</p>
+                  <div className="mt-0.5">
+                    {report.severity ? (
+                      <div className="flex items-center gap-1">
+                        <SeverityBadge severity={report.severity} />
+                        <span className="text-[10px] text-gray-400">
+                          {report.severity_is_estimated ? '(AI)' : '(Verified)'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="font-medium text-amber-700">Pending review</p>
+                        <p className="text-[10px] text-gray-400">Requires verification</p>
                       </div>
                     )}
-                    <p className="text-[10px] text-gray-400 italic pt-1 border-t border-gray-200">
-                      Method: 2D visible area & distress geometry. True structural cavity depth cannot be determined from optical imagery.
+                  </div>
+                </div>
+                <div>
+                  <p className="text-gray-500">Priority Score</p>
+                  <div className="mt-0.5">
+                    {report.priority_score !== null ? (
+                      <p className="font-semibold text-accent text-sm">
+                        {report.priority_score.toFixed(0)}/100
+                      </p>
+                    ) : (
+                      <div>
+                        <p className="font-medium text-gray-600">Pending required inputs</p>
+                        <p className="text-[10px] text-gray-400">Awaiting verified severity</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2D Geometric Evidence breakdown */}
+              {report.ai_bounding_boxes?.severity_estimation && (
+                <div className="p-2.5 bg-white border border-gray-200 rounded-md text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-gray-800">
+                      Measurable 2D Geometry Evidence:
+                    </span>
+                    <span className="text-[11px] text-gray-500">
+                      Score: {report.ai_bounding_boxes.severity_estimation.score}/10
+                    </span>
+                  </div>
+                  {report.ai_bounding_boxes.severity_estimation.features && (
+                    <div className="grid grid-cols-2 gap-2 text-gray-600 text-[11px] pt-1">
+                      <div>
+                        Footprint area:{' '}
+                        <span className="font-mono font-medium text-gray-900">
+                          {report.ai_bounding_boxes.severity_estimation.features.visible_area_percent}%
+                        </span>
+                      </div>
+                      <div>
+                        Elongation:{' '}
+                        <span className="font-mono font-medium text-gray-900">
+                          {report.ai_bounding_boxes.severity_estimation.features.max_aspect_ratio}x
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-gray-400 italic pt-1 border-t border-gray-200">
+                    Method: 2D visible area & distress geometry. True structural cavity depth cannot be determined from optical imagery.
+                  </p>
+                </div>
+              )}
+
+              {/* Override Action Button */}
+              <div className="pt-1">
+                {!showOverrideModal ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setShowOverrideModal(true);
+                      setOverrideSeverity(report.severity ?? 'moderate');
+                      setOverrideDamageType(report.damage_type ?? 'pothole');
+                    }}
+                  >
+                    Human Override / Correction
+                  </Button>
+                ) : (
+                  <div className="p-4 bg-purple-50/50 border border-purple-200 rounded-lg space-y-3">
+                    <h4 className="text-xs font-bold text-purple-900">Record Coordinator Assessment Override</h4>
+                    <p className="text-[11px] text-purple-700">
+                      Overrides must have an auditable justification. The original AI scores remain preserved for transparency.
                     </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Select
+                        label="Corrected Severity"
+                        value={overrideSeverity}
+                        options={[
+                          { value: 'low', label: 'Low — minor defect' },
+                          { value: 'moderate', label: 'Moderate — standard repair' },
+                          { value: 'high', label: 'High — safety concern' },
+                          { value: 'critical', label: 'Critical — immediate hazard' },
+                        ]}
+                        onChange={(e) => setOverrideSeverity(e.target.value)}
+                      />
+                      <Select
+                        label="Corrected Damage Type"
+                        value={overrideDamageType}
+                        options={[
+                          { value: 'pothole', label: 'Pothole' },
+                          { value: 'crack', label: 'Crack' },
+                          { value: 'surface_deterioration', label: 'Surface Deterioration' },
+                          { value: 'rutting', label: 'Rutting' },
+                          { value: 'other', label: 'Other' },
+                        ]}
+                        onChange={(e) => setOverrideDamageType(e.target.value)}
+                      />
+                    </div>
+                    <Textarea
+                      label="Mandatory Reason for Override *"
+                      value={overrideReason}
+                      onChange={(e) => setOverrideReason(e.target.value)}
+                      rows={2}
+                      placeholder="e.g. Field inspection reveals deep sub-base cavitation posing two-wheeler tipping hazard."
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setShowOverrideModal(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={!overrideReason || overrideReason.length < 5}
+                        loading={overrideMutation.isPending}
+                        onClick={() => overrideMutation.mutate({
+                          severity: overrideSeverity,
+                          damage_type: overrideDamageType,
+                          reason: overrideReason,
+                        })}
+                      >
+                        Save Human Override
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
-            </Card>
-          )}
+            </div>
+          </Card>
 
           {/* Priority */}
           {report.priority_assessment && (
             <Card>
               <CardHeader>
-                <CardTitle>Fuzzy priority assessment</CardTitle>
+                <CardTitle>Mamdani Fuzzy Priority Assessment</CardTitle>
                 <span className="font-bold text-lg text-gray-900">
                   {report.priority_assessment.priority_score.toFixed(0)}/100
                   <span className="ml-2 text-sm font-normal text-gray-500">
@@ -414,19 +605,6 @@ export default function ReportDetailPage() {
                   ]}
                   onChange={(e) => { setActionStatus(e.target.value); setActionError(null); setActionSuccess(null); }}
                 />
-                {actionStatus === 'verified' && (
-                  <Select
-                    label="Confirm verified severity"
-                    value={verifiedSeverity || (report.severity ?? 'moderate')}
-                    options={[
-                      { value: 'low', label: 'Low — minor defect' },
-                      { value: 'moderate', label: 'Moderate — standard repair' },
-                      { value: 'high', label: 'High — safety concern' },
-                      { value: 'critical', label: 'Critical — immediate hazard' },
-                    ]}
-                    onChange={(e) => setVerifiedSeverity(e.target.value)}
-                  />
-                )}
                 {actionStatus === 'rejected' && (
                   <Textarea
                     label="Rejection reason *"
@@ -449,7 +627,6 @@ export default function ReportDetailPage() {
                   loading={statusMutation.isPending}
                   onClick={() => statusMutation.mutate({
                     status: actionStatus,
-                    severity: actionStatus === 'verified' ? (verifiedSeverity || report.severity || 'moderate') : undefined,
                     reason,
                     notes,
                   })}

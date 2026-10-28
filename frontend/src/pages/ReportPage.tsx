@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Camera, Upload, CheckCircle2, ArrowLeft, RefreshCw } from 'lucide-react';
 import { RideHailingLocationPicker } from '../components/RideHailingLocationPicker';
 import { Button } from '../components/Button';
@@ -27,6 +28,7 @@ interface FormState {
 
 export default function ReportPage() {
   const { user } = useAuth();
+  const qc = useQueryClient();
   const [step, setStep] = useState<Step>('photo');
   const [form, setForm] = useState<FormState>({
     image: null,
@@ -116,6 +118,7 @@ export default function ReportPage() {
       const res = await api.post<SubmitConfirmation>('/reports', data, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      qc.invalidateQueries({ queryKey: ['reports'] });
       setResult(res.data);
       setStep('done');
     } catch (err: unknown) {

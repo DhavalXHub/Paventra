@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { MapPin, ArrowLeft, ShieldAlert, FileText, Search, ChevronDown, ChevronUp, Lock, X } from 'lucide-react';
 import { useAuth } from '../features/auth/AuthContext';
+import { getAuthorizedRedirect } from '../features/auth/routing';
 import { Button } from '../components/Button';
 import { Input } from '../components/FormElements';
 import { Alert } from '../components/Feedback';
@@ -45,7 +46,7 @@ interface AuthConfig {
 }
 
 export default function LoginPage() {
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, isAuthenticated, isInitializing, role } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
@@ -78,19 +79,21 @@ export default function LoginPage() {
   const [gisRendered, setGisRendered] = useState(false);
   const [gisFailed, setGisFailed] = useState(false);
 
-  const redirectUser = useCallback((role: string) => {
-    if (fromPath && fromPath !== '/login' && fromPath !== '/register') {
-      navigate(fromPath);
-      return;
+  const redirectUser = useCallback(
+    (userRole: string) => {
+      const destination = getAuthorizedRedirect(userRole, fromPath);
+      navigate(destination, { replace: true });
+    },
+    [fromPath, navigate]
+  );
+
+  // If already authenticated, redirect immediately to role-authorized landing page
+  useEffect(() => {
+    if (isAuthenticated && !isInitializing && role) {
+      const destination = getAuthorizedRedirect(role, fromPath);
+      navigate(destination, { replace: true });
     }
-    if (role === 'citizen') {
-      navigate('/my-reports');
-    } else if (role === 'repair_team') {
-      navigate('/team/jobs');
-    } else {
-      navigate('/coordinator');
-    }
-  }, [fromPath, navigate]);
+  }, [isAuthenticated, isInitializing, role, fromPath, navigate]);
 
   // Fetch backend auth config on mount
   useEffect(() => {
@@ -224,9 +227,8 @@ export default function LoginPage() {
     setError(null);
     setGoogleNotice(null);
     try {
-      await login(email, password);
-      const role = localStorage.getItem('user_role') || 'citizen';
-      redirectUser(role);
+      const user = await login(email, password);
+      redirectUser(user.role);
     } catch (err: any) {
       setError(err?.response?.data?.detail ?? 'Invalid email or password.');
     } finally {

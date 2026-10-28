@@ -73,7 +73,7 @@ export default function MyReportsPage() {
 
   function handleLogout() {
     logout();
-    navigate('/');
+    navigate('/login', { replace: true });
   }
 
   const filteredReports = (reports ?? []).filter((r) => {

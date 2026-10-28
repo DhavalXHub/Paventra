@@ -723,3 +723,49 @@ async def test_guest_submission_claim_token_and_claiming():
         track_res2 = await client.get(f"/api/v1/reports/track/{public_ref}")
         assert track_res2.status_code == 200
         assert track_res2.json()["is_claimed"] is True
+
+
+@pytest.mark.asyncio
+async def test_role_isolation_and_identity_resolution():
+    """Verify role integrity, /auth/me resolution, and protected route access control."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Login as coordinator
+        coord_login = await client.post("/api/v1/auth/login", json={
+            "email": "test_coord@paventra.local",
+            "password": "CoordPass123!",
+        })
+        assert coord_login.status_code == 200
+        coord_token = coord_login.json()["access_token"]
+        assert coord_login.json()["role"] == "coordinator"
+
+        # Verify /auth/me
+        coord_me = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {coord_token}"})
+        assert coord_me.status_code == 200
+        assert coord_me.json()["role"] == "coordinator"
+
+        # Coordinator can access coordinator reports list
+        coord_reports = await client.get("/api/v1/reports", headers={"Authorization": f"Bearer {coord_token}"})
+        assert coord_reports.status_code == 200
+
+        # 2. Login as citizen
+        cit_login = await client.post("/api/v1/auth/login", json={
+            "email": "test_citizen@paventra.local",
+            "password": "CitizenPass123!",
+        })
+        assert cit_login.status_code == 200
+        cit_token = cit_login.json()["access_token"]
+        assert cit_login.json()["role"] == "citizen"
+
+        # Verify /auth/me
+        cit_me = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {cit_token}"})
+        assert cit_me.status_code == 200
+        assert cit_me.json()["role"] == "citizen"
+
+        # Citizen CANNOT access coordinator reports list (strictly forbidden)
+        cit_reports = await client.get("/api/v1/reports", headers={"Authorization": f"Bearer {cit_token}"})
+        assert cit_reports.status_code == 403
+
+        # Citizen CANNOT access teams list
+        cit_teams = await client.get("/api/v1/teams", headers={"Authorization": f"Bearer {cit_token}"})
+        assert cit_teams.status_code == 403

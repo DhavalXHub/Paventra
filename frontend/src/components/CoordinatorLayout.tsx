@@ -27,7 +27,7 @@ export function CoordinatorLayout({ children }: { children: React.ReactNode }) {
 
   function handleLogout() {
     logout();
-    navigate('/login');
+    navigate('/login', { replace: true });
   }
 
   return (

@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { MapPin, ArrowLeft, ShieldCheck, FileText, Search } from 'lucide-react';
 import api from '../lib/api';
 import { useAuth } from '../features/auth/AuthContext';
+import { getAuthorizedRedirect } from '../features/auth/routing';
 import { Button } from '../components/Button';
 import { Input } from '../components/FormElements';
 import { Alert } from '../components/Feedback';
@@ -32,12 +33,9 @@ export default function RegisterPage() {
         role: 'citizen',
       });
       // Automatically log them in after registration
-      await login(email, password);
-      if (fromPath && fromPath !== '/login' && fromPath !== '/register') {
-        navigate(fromPath);
-      } else {
-        navigate('/my-reports');
-      }
+      const user = await login(email, password);
+      const destination = getAuthorizedRedirect(user.role, fromPath);
+      navigate(destination, { replace: true });
     } catch (err: any) {
       setError(err?.response?.data?.detail ?? 'Failed to register. Please check your details.');
     } finally {

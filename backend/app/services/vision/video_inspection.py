@@ -16,11 +16,84 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.models.inspection import InspectionJob, InspectionFrame, InspectionStatus
-from app.models.report import Report, ReportSource, ReportStatus, DamageType, SeverityLevel, LocationSource
+from app.models.report import Report, ReportSource, ReportStatus, DamageType, SeverityLevel, LocationSource, MediaAsset
 from app.services.vision.inference import detector, save_annotated_image
 from app.services.prioritization.fuzzy_engine import compute_priority
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_inspection_file_path(path_str: Optional[str]) -> Optional[Path]:
+    """
+    Resolves a stored inspection file path (video, GPS, frame) to a consistent absolute Path.
+    Handles:
+    - Absolute paths (if already absolute and exists)
+    - Relative paths starting with 'uploads/inspections/' or 'uploads\\inspections\\'
+    - Relative paths with just filename or subpaths
+    - Both POSIX and Windows backslash separators
+    - Fallbacks across settings.upload_path, backend root, and project root.
+    """
+    if not path_str or not str(path_str).strip():
+        return None
+
+    clean_str = str(path_str).strip()
+    raw_path = Path(clean_str)
+
+    if raw_path.is_absolute() and raw_path.exists():
+        return raw_path.resolve()
+
+    filename = raw_path.name
+    upload_root = settings.upload_path.resolve()
+    backend_root = Path(__file__).resolve().parent.parent.parent
+    project_root = backend_root.parent
+
+    # Candidate paths in order of preference
+    candidates = [
+        upload_root / "inspections" / filename,
+        upload_root / clean_str.replace("uploads/", "").replace("uploads\\", ""),
+        upload_root / clean_str,
+        backend_root / clean_str,
+        backend_root / "uploads" / "inspections" / filename,
+        project_root / clean_str,
+        project_root / "uploads" / "inspections" / filename,
+        Path.cwd() / clean_str,
+    ]
+
+    for candidate in candidates:
+        try:
+            if candidate.exists() and candidate.is_file():
+                return candidate.resolve()
+        except OSError:
+            continue
+
+    # Default to canonical destination path under upload_root / "inspections"
+    return (upload_root / "inspections" / filename).resolve()
+
+
+def validate_video_file(resolved_path: Optional[Path]) -> tuple[bool, Optional[str]]:
+    """
+    Validates that a video file exists, is non-empty, and has a minimum size for a media container.
+    Returns (is_valid, error_reason).
+    """
+    if resolved_path is None or not resolved_path.exists():
+        return False, f"Source video file not found at '{resolved_path}'"
+
+    try:
+        size = resolved_path.stat().st_size
+    except OSError as e:
+        return False, f"Could not access video file: {e}"
+
+    if size == 0:
+        return False, f"Invalid video file ({resolved_path.name}): file is empty (0 bytes)"
+
+    # A valid video container (MP4, AVI, MOV) with headers requires at least 1 KB
+    if size < 1024:
+        return False, (
+            f"Invalid video file ({resolved_path.name}): size is {size} bytes "
+            f"(minimum 1024 bytes required for valid video container). File appears corrupted or incomplete."
+        )
+
+    return True, None
 
 
 def parse_gps_track(gps_track_path: Optional[str]) -> List[Dict[str, Any]]:
@@ -33,16 +106,19 @@ def parse_gps_track(gps_track_path: Optional[str]) -> List[Dict[str, Any]]:
     ]
     Safeguard: If no GPS file is provided, exact coordinates are never inferred from pixels.
     """
-    if not gps_track_path or not os.path.exists(gps_track_path):
+    if not gps_track_path:
+        return []
+    resolved = resolve_inspection_file_path(gps_track_path)
+    if not resolved or not resolved.exists():
         return []
     
     try:
-        with open(gps_track_path, "r", encoding="utf-8") as f:
+        with open(resolved, "r", encoding="utf-8") as f:
             data = json.load(f)
             if isinstance(data, list):
                 return data
     except Exception as e:
-        logger.warning(f"Failed to parse GPS track file {gps_track_path}: {e}")
+        logger.warning(f"Failed to parse GPS track file {resolved}: {e}")
     return []
 
 
@@ -80,38 +156,52 @@ async def process_inspection_job_async(job_id: str, session_factory):
 
         job.status = InspectionStatus.PROCESSING
         job.started_at = datetime.now(timezone.utc)
-        job.progress_percent = 5.0
+        job.progress_percent = 0.0
+        job.error_message = None
         await db.commit()
 
-        video_path = job.source_path
-        if not os.path.exists(video_path):
+        # Step 1: Resolve filesystem path
+        resolved_video_path = resolve_inspection_file_path(job.source_path)
+        is_valid, validation_error = validate_video_file(resolved_video_path)
+        if not is_valid:
             job.status = InspectionStatus.FAILED
-            job.error_message = f"Source media file not found: {video_path}"
+            job.progress_percent = 0.0
+            job.error_message = validation_error
             await db.commit()
+            logger.error(f"Job {job_id} failed validation: {validation_error}")
             return
 
         gps_track = parse_gps_track(job.gps_track_path)
-        frames_out_dir = Path(settings.UPLOAD_DIR) / "inspections" / f"job_{job.id}"
+        frames_out_dir = settings.upload_path / "inspections" / f"job_{job.id}"
         frames_out_dir.mkdir(parents=True, exist_ok=True)
 
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            job.status = InspectionStatus.FAILED
-            job.error_message = f"OpenCV could not open video: {video_path}"
-            await db.commit()
-            return
-
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        total_video_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        sample_step = max(1, job.frame_sample_rate)
-
-        frame_idx = 0
-        sampled_count = 0
-        detections_found = 0
-        reports_created = 0
-        last_detection_time = -999.0  # For duplicate suppression (seconds)
-
+        cap = None
         try:
+            cap = cv2.VideoCapture(str(resolved_video_path))
+            if not cap.isOpened():
+                job.status = InspectionStatus.FAILED
+                job.progress_percent = 0.0
+                job.error_message = (
+                    f"OpenCV could not decode video container '{resolved_video_path.name}'. "
+                    f"Format or codec may be unsupported or corrupted."
+                )
+                await db.commit()
+                return
+
+            # Successfully opened video
+            job.progress_percent = 5.0
+            await db.commit()
+
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+            total_video_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            sample_step = max(1, job.frame_sample_rate)
+
+            frame_idx = 0
+            sampled_count = 0
+            detections_found = 0
+            reports_created = 0
+            last_detection_time = -999.0  # For duplicate suppression (seconds)
+
             while True:
                 ret, frame = cap.read()
                 if not ret:
@@ -127,13 +217,21 @@ async def process_inspection_job_async(job_id: str, session_factory):
                     frame_path = frames_out_dir / frame_filename
                     cv2.imwrite(str(frame_path), frame)
 
+                    # Relative web-friendly paths for frontend display
+                    web_frame_path = f"uploads/inspections/job_{job.id}/{frame_filename}"
+
                     # Run inference
                     inf_result = detector.infer(str(frame_path), save_annotated=True)
                     annotated_path = None
+                    web_annotated_path = None
                     if inf_result.annotated_image is not None:
-                        annotated_path = save_annotated_image(
+                        ann_full_path = save_annotated_image(
                             inf_result.annotated_image, frames_out_dir, prefix=f"ann_{frame_idx:06d}"
                         )
+                        if ann_full_path:
+                            ann_name = Path(ann_full_path).name
+                            web_annotated_path = f"uploads/inspections/job_{job.id}/{ann_name}"
+                            annotated_path = str(ann_full_path)
 
                     is_duplicate = False
                     detections_list = [
@@ -158,8 +256,8 @@ async def process_inspection_job_async(job_id: str, session_factory):
                     job_frame = InspectionFrame(
                         job_id=job.id,
                         frame_index=frame_idx,
-                        frame_path=str(frame_path),
-                        annotated_path=annotated_path,
+                        frame_path=web_frame_path,
+                        annotated_path=web_annotated_path or annotated_path,
                         timestamp_seconds=timestamp_sec,
                         latitude=lat,
                         longitude=lon,
@@ -246,21 +344,39 @@ async def process_inspection_job_async(job_id: str, session_factory):
                         db.add(report)
                         await db.flush()
                         job_frame.report_id = report.id
+
+                        # Attach MediaAsset to Report
+                        photo_asset = MediaAsset(
+                            report_id=report.id,
+                            file_path=web_frame_path,
+                            file_name=frame_filename,
+                            mime_type="image/jpeg",
+                            file_size_bytes=frame_path.stat().st_size if frame_path.exists() else 0,
+                            asset_type="initial",
+                            annotated_path=web_annotated_path or annotated_path,
+                        )
+                        db.add(photo_asset)
                         reports_created += 1
 
                 frame_idx += 1
-                if total_video_frames > 0 and frame_idx % 60 == 0:
-                    job.progress_percent = min(95.0, round((frame_idx / total_video_frames) * 100, 1))
-                    await db.commit()
+                if total_video_frames > 0:
+                    pct = min(95.0, round((frame_idx / total_video_frames) * 100, 1))
+                    if pct > job.progress_percent and (frame_idx % sample_step == 0 or frame_idx % 10 == 0):
+                        job.progress_percent = pct
+                        await db.commit()
 
         except Exception as e:
             logger.exception(f"Error processing inspection job {job.id}: {e}")
             job.status = InspectionStatus.FAILED
-            job.error_message = str(e)
+            job.error_message = f"Processing error at frame {frame_idx}: {str(e)}"
             await db.commit()
             return
         finally:
-            cap.release()
+            if cap is not None:
+                try:
+                    cap.release()
+                except Exception as ex:
+                    logger.warning(f"Error releasing video capture: {ex}")
 
         job.total_frames_sampled = sampled_count
         job.detections_count = detections_found

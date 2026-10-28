@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { MapPin, User, Menu, X, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { MapPin, User, Menu, X, ArrowRight, ShieldCheck, LogOut } from 'lucide-react';
 import { useAuth } from '../features/auth/AuthContext';
 
 export function PublicHeader({ current }: { current?: 'home' | 'report' | 'track' | 'account' | 'how-it-works' | 'road-intelligence' | 'lifecycle' }) {
   const { isAuthenticated, isCoordinator, isRepairTeam, user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const accountHref = isCoordinator
     ? '/coordinator'
@@ -127,7 +128,7 @@ export function PublicHeader({ current }: { current?: 'home' | 'report' | 'track
                   type="button"
                   onClick={() => {
                     logout();
-                    window.location.href = '/';
+                    navigate('/login', { replace: true });
                   }}
                   className="text-xs text-stone-500 hover:text-red-600 transition-colors"
                 >
@@ -243,20 +244,34 @@ export function PublicHeader({ current }: { current?: 'home' | 'report' | 'track
 
           <div className="pt-2 border-t border-stone-100 flex flex-col gap-2">
             {isAuthenticated ? (
-              <Link
-                to={accountHref}
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-2 py-2 text-sm font-semibold text-[#14462a]"
-              >
-                <User className="w-4 h-4" />
-                <span>
-                  {isCoordinator
-                    ? 'Coordinator Portal'
-                    : isRepairTeam
-                    ? 'Repair Operations'
-                    : 'My Reports'}
-                </span>
-              </Link>
+              <div className="flex flex-col gap-1">
+                <Link
+                  to={accountHref}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-2 py-2 text-sm font-semibold text-[#14462a]"
+                >
+                  <User className="w-4 h-4" />
+                  <span>
+                    {isCoordinator
+                      ? 'Coordinator Portal'
+                      : isRepairTeam
+                      ? 'Repair Operations'
+                      : 'My Reports'}
+                  </span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    setMobileMenuOpen(false);
+                    navigate('/login', { replace: true });
+                  }}
+                  className="flex items-center gap-2 py-1.5 text-xs font-semibold text-stone-500 hover:text-red-600 text-left transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign out</span>
+                </button>
+              </div>
             ) : (
               <div className="flex gap-2 pt-1">
                 <Link

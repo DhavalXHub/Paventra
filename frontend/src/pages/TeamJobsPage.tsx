@@ -87,7 +87,7 @@ export default function TeamJobsPage() {
 
   function handleLogout() {
     logout();
-    navigate('/login');
+    navigate('/login', { replace: true });
   }
 
   return (
