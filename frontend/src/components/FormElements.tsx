@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -6,8 +7,13 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   hint?: string;
 }
 
-export function Input({ label, error, hint, className = '', id, ...props }: InputProps) {
+export function Input({ label, error, hint, className = '', id, type, ...props }: InputProps) {
   const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
+  const isPassword = type === 'password';
+  const [showPassword, setShowPassword] = useState(false);
+
+  const resolvedType = isPassword ? (showPassword ? 'text' : 'password') : type;
+
   return (
     <div className="space-y-1">
       {label && (
@@ -15,16 +21,36 @@ export function Input({ label, error, hint, className = '', id, ...props }: Inpu
           {label}
         </label>
       )}
-      <input
-        id={inputId}
-        className={`w-full px-3 py-2 text-sm border rounded-md bg-white text-gray-900
-          placeholder-gray-400 transition-colors
-          focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent
-          disabled:bg-gray-50 disabled:text-gray-500
-          ${error ? 'border-red-400' : 'border-gray-200'}
-          ${className}`}
-        {...props}
-      />
+      <div className="relative">
+        <input
+          id={inputId}
+          type={resolvedType}
+          className={`w-full px-3 py-2 text-sm border rounded-md bg-white text-gray-900
+            placeholder-gray-400 transition-colors
+            focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent
+            disabled:bg-gray-50 disabled:text-gray-500
+            ${isPassword ? 'pr-10' : ''}
+            ${error ? 'border-red-400' : 'border-gray-200'}
+            ${className}`}
+          {...props}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            title={showPassword ? 'Hide password' : 'Show password'}
+            className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none"
+            tabIndex={-1}
+          >
+            {showPassword ? (
+              <EyeOff className="w-4 h-4" aria-hidden="true" />
+            ) : (
+              <Eye className="w-4 h-4" aria-hidden="true" />
+            )}
+          </button>
+        )}
+      </div>
       {hint && !error && <p className="text-xs text-gray-500">{hint}</p>}
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>

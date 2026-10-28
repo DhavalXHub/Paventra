@@ -556,19 +556,14 @@ export default function LoginPage() {
             {linkingError && <Alert type="error" message={linkingError} />}
 
             <form onSubmit={handleLinkAccountSubmit} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Account Password
-                </label>
-                <input
-                  type="password"
-                  value={linkingPassword}
-                  onChange={(e) => setLinkingPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#14462a]"
-                  required
-                />
-              </div>
+              <Input
+                label="Account Password"
+                type="password"
+                value={linkingPassword}
+                onChange={(e) => setLinkingPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
 
               <div className="flex gap-2 pt-2">
                 <Button

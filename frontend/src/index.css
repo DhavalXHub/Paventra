@@ -25,3 +25,9 @@ body {
 }
 
 .leaflet-container { z-index: 0; }
+
+/* Hide default browser password reveal and clear buttons to prevent conflicting icons */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from typing import Optional, Any
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, computed_field
 
 
 # ─── Auth ────────────────────────────────────────────────────────────────────
@@ -98,6 +98,12 @@ class MediaAssetOut(BaseModel):
     file_size_bytes: int
     asset_type: str
     uploaded_at: datetime
+
+    @computed_field
+    @property
+    def url(self) -> str:
+        folder = "completions" if self.asset_type == "completion_photo" else "reports"
+        return f"/uploads/{folder}/{self.file_name}"
 
     model_config = {"from_attributes": True}
 
