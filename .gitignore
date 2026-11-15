@@ -83,3 +83,13 @@ data/road_damage/models/*
 
 # Local test artifacts (uncomment if sample-test contains private or unlicensed files)
 # sample-test/
+# Presentation and generated video binaries
+*.mp4
+*.mov
+*.avi
+*.mkv
+BDA_Presentation/*.pptx
+
+# Big Data local tools and raw datasets (large binary distributions)
+bda/tools/
+bda/dataset/

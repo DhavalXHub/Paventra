@@ -1,0 +1,58 @@
+{
+  "benchmark_suite": "Paventra BDA Performance Benchmarking Suite",
+  "timestamp": "2026-11-15 11:39:06",
+  "hardware_environment": {
+    "os": "Windows-11-10.0.26300-SP0",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "cpu_physical_cores": 10,
+    "cpu_logical_cores": 16,
+    "total_ram_gb": 23.71,
+    "available_ram_gb": 5.76,
+    "python_version": "3.12.9",
+    "pandas_version": "2.3.2"
+  },
+  "pandas_vs_spark_aggregation": {
+    "dataset_rows": 8203,
+    "iterations": 3,
+    "spark_startup_seconds": 10.6725,
+    "pandas": {
+      "avg_read_seconds": 0.1071,
+      "avg_agg_seconds": 0.0044,
+      "avg_total_seconds": 0.1115,
+      "records_per_second": 73569.51
+    },
+    "spark": {
+      "avg_read_seconds": 0.9522,
+      "avg_agg_seconds": 1.3745,
+      "avg_total_seconds": 2.3267,
+      "records_per_second": 3525.59
+    },
+    "scientific_insight": "For in-memory datasets under ~10 million records on a single workstation, Pandas demonstrates lower latency due to the absence of JVM catalyst query compilation and inter-process serialization overhead. Conversely, Apache Spark local[*] provides fault tolerance, adaptive execution planning, and seamless out-of-core scalability to multi-node distributed clusters where Pandas crashes with Out-Of-Memory errors."
+  },
+  "yolo_batch_scaling": [
+    {
+      "batch_size": 10,
+      "duration_seconds": 2.292,
+      "latency_ms_per_image": 229.2,
+      "throughput_fps": 4.36
+    },
+    {
+      "batch_size": 25,
+      "duration_seconds": 0.863,
+      "latency_ms_per_image": 34.52,
+      "throughput_fps": 28.97
+    },
+    {
+      "batch_size": 50,
+      "duration_seconds": 1.677,
+      "latency_ms_per_image": 33.54,
+      "throughput_fps": 29.82
+    },
+    {
+      "batch_size": 100,
+      "duration_seconds": 4.554,
+      "latency_ms_per_image": 45.54,
+      "throughput_fps": 21.96
+    }
+  ]
+}

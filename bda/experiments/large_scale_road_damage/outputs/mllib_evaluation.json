@@ -1,0 +1,55 @@
+{
+  "model_type": "org.apache.spark.ml.classification.RandomForestClassificationModel",
+  "algorithm": "RandomForestClassifier",
+  "hyperparameters": {
+    "numTrees": 50,
+    "maxDepth": 8,
+    "seed": 42,
+    "featuresCol": "features",
+    "labelCol": "label"
+  },
+  "target_classes": [
+    "D40",
+    "D20",
+    "D00",
+    "D44",
+    "D01",
+    "D10",
+    "D43",
+    "D11",
+    "D50",
+    "D0w0"
+  ],
+  "feature_columns": [
+    "normalized_width",
+    "normalized_height",
+    "normalized_area",
+    "aspect_ratio",
+    "center_x",
+    "center_y"
+  ],
+  "feature_importances": {
+    "normalized_width": 0.1732,
+    "normalized_height": 0.2888,
+    "normalized_area": 0.1317,
+    "aspect_ratio": 0.2389,
+    "center_x": 0.1074,
+    "center_y": 0.0599
+  },
+  "split_strategy": "Grouped random split by distinct image_id (zero cross-image leakage)",
+  "train_samples": 6703,
+  "test_samples": 1500,
+  "metrics": {
+    "test_accuracy": 0.6547,
+    "weighted_precision": 0.6216,
+    "weighted_recall": 0.6547,
+    "weighted_f1_score": 0.6318,
+    "majority_baseline_class": "D40",
+    "majority_baseline_accuracy": 0.382,
+    "accuracy_improvement_over_baseline": 0.2727
+  },
+  "timings": {
+    "training_time_seconds": 5.316,
+    "total_experiment_seconds": 38.064
+  }
+}

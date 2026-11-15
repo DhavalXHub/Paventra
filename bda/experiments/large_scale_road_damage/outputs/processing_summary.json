@@ -1,0 +1,363 @@
+{
+  "spark_version": "4.2.0",
+  "master": "local[*]",
+  "total_duration_seconds": 187.294,
+  "stages": [
+    {
+      "stage": "disk_ingestion",
+      "processed_records": 17868,
+      "failed_records": 0,
+      "duration_seconds": 1.233,
+      "status": "COMPLETED"
+    },
+    {
+      "stage": "spark_initialization",
+      "processed_records": 0,
+      "failed_records": 0,
+      "duration_seconds": 9.854,
+      "status": "COMPLETED"
+    },
+    {
+      "stage": "dataframe_creation",
+      "processed_records": 17868,
+      "failed_records": 0,
+      "duration_seconds": 0.727,
+      "status": "COMPLETED"
+    },
+    {
+      "stage": "parquet_serialization",
+      "processed_records": 17868,
+      "failed_records": 0,
+      "duration_seconds": 24.994,
+      "status": "COMPLETED"
+    },
+    {
+      "stage": "spark_sql_analytics",
+      "processed_records": 6,
+      "failed_records": 0,
+      "duration_seconds": 81.257,
+      "status": "COMPLETED"
+    }
+  ],
+  "tables": {
+    "image_metadata_rows": 9665,
+    "damage_annotations_rows": 8203,
+    "image_metadata_parquet": "D:\\Paventra\\bda\\experiments\\large_scale_road_damage\\outputs\\image_metadata.parquet",
+    "damage_annotations_parquet": "D:\\Paventra\\bda\\experiments\\large_scale_road_damage\\outputs\\damage_annotations.parquet"
+  },
+  "sql_analytics": {
+    "dataset_splits": [
+      {
+        "dataset_split": "test",
+        "image_count": 1959,
+        "total_bytes": 132775501,
+        "total_mb": 126.62
+      },
+      {
+        "dataset_split": "train",
+        "image_count": 7706,
+        "total_bytes": 519665922,
+        "total_mb": 495.59
+      }
+    ],
+    "class_distribution": [
+      {
+        "damage_class": "D40",
+        "object_count": 3187,
+        "avg_width": 120.16,
+        "avg_height": 67.59,
+        "avg_area": 11868.79,
+        "avg_aspect_ratio": 1.9018,
+        "avg_normalized_area": 0.022895
+      },
+      {
+        "damage_class": "D20",
+        "object_count": 2021,
+        "avg_width": 329.68,
+        "avg_height": 165.32,
+        "avg_area": 59260.81,
+        "avg_aspect_ratio": 2.0592,
+        "avg_normalized_area": 0.114315
+      },
+      {
+        "damage_class": "D00",
+        "object_count": 1555,
+        "avg_width": 95.75,
+        "avg_height": 131.68,
+        "avg_area": 14635.96,
+        "avg_aspect_ratio": 0.8003,
+        "avg_normalized_area": 0.028233
+      },
+      {
+        "damage_class": "D44",
+        "object_count": 1062,
+        "avg_width": 95.17,
+        "avg_height": 96.02,
+        "avg_area": 10468.74,
+        "avg_aspect_ratio": 1.0835,
+        "avg_normalized_area": 0.020194
+      },
+      {
+        "damage_class": "D01",
+        "object_count": 179,
+        "avg_width": 98.15,
+        "avg_height": 119.47,
+        "avg_area": 13318.88,
+        "avg_aspect_ratio": 0.8912,
+        "avg_normalized_area": 0.025692
+      },
+      {
+        "damage_class": "D10",
+        "object_count": 68,
+        "avg_width": 247.65,
+        "avg_height": 49.25,
+        "avg_area": 13445.24,
+        "avg_aspect_ratio": 5.5244,
+        "avg_normalized_area": 0.025936
+      },
+      {
+        "damage_class": "D43",
+        "object_count": 57,
+        "avg_width": 455.6,
+        "avg_height": 103.19,
+        "avg_area": 51488.89,
+        "avg_aspect_ratio": 4.9921,
+        "avg_normalized_area": 0.099323
+      },
+      {
+        "damage_class": "D11",
+        "object_count": 45,
+        "avg_width": 324.4,
+        "avg_height": 56.36,
+        "avg_area": 18355.64,
+        "avg_aspect_ratio": 6.6474,
+        "avg_normalized_area": 0.035408
+      },
+      {
+        "damage_class": "D50",
+        "object_count": 28,
+        "avg_width": 92.64,
+        "avg_height": 40.96,
+        "avg_area": 4053.14,
+        "avg_aspect_ratio": 2.4622,
+        "avg_normalized_area": 0.007819
+      },
+      {
+        "damage_class": "D0w0",
+        "object_count": 1,
+        "avg_width": 115.0,
+        "avg_height": 173.0,
+        "avg_area": 19895.0,
+        "avg_aspect_ratio": 0.6647,
+        "avg_normalized_area": 0.038378
+      }
+    ],
+    "annotations_per_image_distribution": [
+      {
+        "annotation_count": 0,
+        "image_count": 3921
+      },
+      {
+        "annotation_count": 1,
+        "image_count": 1623
+      },
+      {
+        "annotation_count": 2,
+        "image_count": 1073
+      },
+      {
+        "annotation_count": 3,
+        "image_count": 535
+      },
+      {
+        "annotation_count": 4,
+        "image_count": 273
+      },
+      {
+        "annotation_count": 5,
+        "image_count": 128
+      },
+      {
+        "annotation_count": 6,
+        "image_count": 57
+      },
+      {
+        "annotation_count": 7,
+        "image_count": 57
+      },
+      {
+        "annotation_count": 8,
+        "image_count": 17
+      },
+      {
+        "annotation_count": 9,
+        "image_count": 13
+      },
+      {
+        "annotation_count": 10,
+        "image_count": 5
+      },
+      {
+        "annotation_count": 13,
+        "image_count": 3
+      },
+      {
+        "annotation_count": 14,
+        "image_count": 1
+      }
+    ],
+    "bounding_box_extremes": {
+      "min_bbox_area": 304.0,
+      "max_bbox_area": 346368.0,
+      "avg_bbox_area": 24218.12,
+      "median_bbox_area": 9855.0,
+      "min_aspect_ratio": 0.1026,
+      "max_aspect_ratio": 25.85,
+      "avg_aspect_ratio": 1.6831
+    },
+    "top_damaged_images": [
+      {
+        "image_id": "India_008860",
+        "annotation_count": 14,
+        "width": 720,
+        "height": 720,
+        "defect_classes": "D40, D40, D40, D40, D40, D40, D40, D40, D40, D40, D40, D40, D40, D00"
+      },
+      {
+        "image_id": "India_002793",
+        "annotation_count": 13,
+        "width": 720,
+        "height": 720,
+        "defect_classes": "D40, D40, D40, D40, D40, D40, D40, D20, D40, D20, D20, D40, D00"
+      },
+      {
+        "image_id": "India_003565",
+        "annotation_count": 13,
+        "width": 720,
+        "height": 720,
+        "defect_classes": "D20, D20, D40, D40, D40, D40, D40, D40, D40, D40, D40, D00, D00"
+      },
+      {
+        "image_id": "India_005781",
+        "annotation_count": 13,
+        "width": 720,
+        "height": 720,
+        "defect_classes": "D20, D20, D40, D40, D40, D40, D40, D40, D40, D40, D40, D40, D40"
+      },
+      {
+        "image_id": "India_000537",
+        "annotation_count": 10,
+        "width": 720,
+        "height": 720,
+        "defect_classes": "D40, D40, D40, D40, D40, D40, D40, D20, D40, D00"
+      },
+      {
+        "image_id": "India_001381",
+        "annotation_count": 10,
+        "width": 720,
+        "height": 720,
+        "defect_classes": "D40, D40, D40, D40, D40, D40, D40, D40, D40, D40"
+      },
+      {
+        "image_id": "India_001722",
+        "annotation_count": 10,
+        "width": 720,
+        "height": 720,
+        "defect_classes": "D40, D40, D40, D40, D40, D40, D40, D20, D00, D00"
+      },
+      {
+        "image_id": "India_001852",
+        "annotation_count": 10,
+        "width": 720,
+        "height": 720,
+        "defect_classes": "D40, D40, D40, D40, D40, D40, D40, D40, D40, D40"
+      },
+      {
+        "image_id": "India_003567",
+        "annotation_count": 10,
+        "width": 720,
+        "height": 720,
+        "defect_classes": "D40, D40, D40, D40, D40, D40, D20, D20, D00, D00"
+      },
+      {
+        "image_id": "India_000052",
+        "annotation_count": 9,
+        "width": 720,
+        "height": 720,
+        "defect_classes": "D20, D00, D00, D40, D40, D40, D40, D40, D40"
+      }
+    ],
+    "spatial_distribution": [
+      {
+        "damage_class": "D00",
+        "avg_center_x": 0.5323,
+        "avg_center_y": 0.7844,
+        "std_center_x": 0.2047,
+        "std_center_y": 0.093
+      },
+      {
+        "damage_class": "D01",
+        "avg_center_x": 0.5422,
+        "avg_center_y": 0.8172,
+        "std_center_x": 0.2148,
+        "std_center_y": 0.0818
+      },
+      {
+        "damage_class": "D0w0",
+        "avg_center_x": 0.7118,
+        "avg_center_y": 0.8007,
+        "std_center_x": null,
+        "std_center_y": null
+      },
+      {
+        "damage_class": "D10",
+        "avg_center_x": 0.5177,
+        "avg_center_y": 0.7878,
+        "std_center_x": 0.1828,
+        "std_center_y": 0.0895
+      },
+      {
+        "damage_class": "D11",
+        "avg_center_x": 0.5291,
+        "avg_center_y": 0.8546,
+        "std_center_x": 0.1582,
+        "std_center_y": 0.0728
+      },
+      {
+        "damage_class": "D20",
+        "avg_center_x": 0.5454,
+        "avg_center_y": 0.8067,
+        "std_center_x": 0.1825,
+        "std_center_y": 0.0712
+      },
+      {
+        "damage_class": "D40",
+        "avg_center_x": 0.4883,
+        "avg_center_y": 0.7427,
+        "std_center_x": 0.2059,
+        "std_center_y": 0.1159
+      },
+      {
+        "damage_class": "D43",
+        "avg_center_x": 0.5194,
+        "avg_center_y": 0.7575,
+        "std_center_x": 0.1091,
+        "std_center_y": 0.0965
+      },
+      {
+        "damage_class": "D44",
+        "avg_center_x": 0.4699,
+        "avg_center_y": 0.795,
+        "std_center_x": 0.2257,
+        "std_center_y": 0.0905
+      },
+      {
+        "damage_class": "D50",
+        "avg_center_x": 0.4109,
+        "avg_center_y": 0.8056,
+        "std_center_x": 0.2387,
+        "std_center_y": 0.0965
+      }
+    ]
+  }
+}

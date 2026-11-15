@@ -1,0 +1,209 @@
+{
+  "analysis_type": "Spark SQL Analytics on YOLO Batch Inference Output",
+  "spark_version": "4.2.0",
+  "master": "local[*]",
+  "execution_time_seconds": 19.591,
+  "results": {
+    "detections_by_class": [
+      {
+        "predicted_class": "alligator_crack",
+        "detection_count": 64,
+        "pct_of_detections": 42.95
+      },
+      {
+        "predicted_class": "pothole",
+        "detection_count": 52,
+        "pct_of_detections": 34.9
+      },
+      {
+        "predicted_class": "longitudinal_crack",
+        "detection_count": 33,
+        "pct_of_detections": 22.15
+      }
+    ],
+    "confidence_by_class": [
+      {
+        "predicted_class": "alligator_crack",
+        "object_count": 64,
+        "avg_confidence": 0.4728,
+        "min_confidence": 0.2038,
+        "max_confidence": 0.858,
+        "stddev_confidence": 0.1981
+      },
+      {
+        "predicted_class": "pothole",
+        "object_count": 52,
+        "avg_confidence": 0.4202,
+        "min_confidence": 0.2025,
+        "max_confidence": 0.8144,
+        "stddev_confidence": 0.1874
+      },
+      {
+        "predicted_class": "longitudinal_crack",
+        "object_count": 33,
+        "avg_confidence": 0.3431,
+        "min_confidence": 0.2027,
+        "max_confidence": 0.6013,
+        "stddev_confidence": 0.1245
+      }
+    ],
+    "detections_per_image_distribution": [
+      {
+        "defects_per_image": 0,
+        "image_count": 197
+      },
+      {
+        "defects_per_image": 1,
+        "image_count": 70
+      },
+      {
+        "defects_per_image": 2,
+        "image_count": 23
+      },
+      {
+        "defects_per_image": 3,
+        "image_count": 7
+      },
+      {
+        "defects_per_image": 4,
+        "image_count": 3
+      }
+    ],
+    "top_detected_images": [
+      {
+        "image_id": "India_000272",
+        "total_detections": 4,
+        "detected_classes": "alligator_crack, pothole, pothole, pothole",
+        "mean_confidence": 0.436
+      },
+      {
+        "image_id": "India_000142",
+        "total_detections": 4,
+        "detected_classes": "alligator_crack, pothole, alligator_crack, pothole",
+        "mean_confidence": 0.474
+      },
+      {
+        "image_id": "India_000033",
+        "total_detections": 4,
+        "detected_classes": "alligator_crack, alligator_crack, alligator_crack, alligator_crack",
+        "mean_confidence": 0.409
+      },
+      {
+        "image_id": "India_000078",
+        "total_detections": 3,
+        "detected_classes": "pothole, pothole, pothole",
+        "mean_confidence": 0.23
+      },
+      {
+        "image_id": "India_000197",
+        "total_detections": 3,
+        "detected_classes": "alligator_crack, longitudinal_crack, alligator_crack",
+        "mean_confidence": 0.306
+      },
+      {
+        "image_id": "India_000397",
+        "total_detections": 3,
+        "detected_classes": "alligator_crack, alligator_crack, alligator_crack",
+        "mean_confidence": 0.497
+      },
+      {
+        "image_id": "India_000014",
+        "total_detections": 3,
+        "detected_classes": "pothole, alligator_crack, alligator_crack",
+        "mean_confidence": 0.444
+      },
+      {
+        "image_id": "India_000052",
+        "total_detections": 3,
+        "detected_classes": "alligator_crack, longitudinal_crack, alligator_crack",
+        "mean_confidence": 0.383
+      },
+      {
+        "image_id": "India_000092",
+        "total_detections": 3,
+        "detected_classes": "longitudinal_crack, longitudinal_crack, pothole",
+        "mean_confidence": 0.254
+      },
+      {
+        "image_id": "India_000226",
+        "total_detections": 3,
+        "detected_classes": "alligator_crack, longitudinal_crack, longitudinal_crack",
+        "mean_confidence": 0.376
+      }
+    ],
+    "confidence_histogram": [
+      {
+        "confidence_range": "0.20 - 0.30",
+        "detection_count": 57,
+        "percentage": 38.26
+      },
+      {
+        "confidence_range": "0.30 - 0.40",
+        "detection_count": 18,
+        "percentage": 12.08
+      },
+      {
+        "confidence_range": "0.40 - 0.50",
+        "detection_count": 25,
+        "percentage": 16.78
+      },
+      {
+        "confidence_range": "0.50 - 0.60",
+        "detection_count": 16,
+        "percentage": 10.74
+      },
+      {
+        "confidence_range": "0.60 - 0.70",
+        "detection_count": 15,
+        "percentage": 10.07
+      },
+      {
+        "confidence_range": "0.70 - 0.80",
+        "detection_count": 13,
+        "percentage": 8.72
+      },
+      {
+        "confidence_range": "0.80 - 1.00",
+        "detection_count": 5,
+        "percentage": 3.36
+      }
+    ],
+    "prediction_bbox_area_stats": {
+      "min_pred_area": 1615.54,
+      "max_pred_area": 276441.48,
+      "avg_pred_area": 48364.65,
+      "median_pred_area": 24981.71,
+      "avg_pred_width": 263.6,
+      "avg_pred_height": 154.16
+    },
+    "detection_coverage": {
+      "zero_detection_images": 197,
+      "positive_detection_images": 103,
+      "total_images": 300,
+      "zero_detection_pct": 65.67,
+      "positive_detection_pct": 34.33
+    },
+    "processing_status": [
+      {
+        "processing_status": "SUCCESS_ZERO_DETECTIONS",
+        "record_count": 197
+      },
+      {
+        "processing_status": "SUCCESS_DETECTED",
+        "record_count": 149
+      }
+    ],
+    "latency_percentiles": {
+      "total_images": 300,
+      "avg_latency_ms": 54.4,
+      "stddev_latency_ms": 141.21,
+      "p50_latency_ms": 46.25,
+      "p90_latency_ms": 49.42,
+      "p95_latency_ms": 50.85,
+      "p99_latency_ms": 58.14,
+      "min_latency_ms": 39.34,
+      "max_latency_ms": 2491.44,
+      "estimated_images_per_second": 18.38
+    }
+  }
+}

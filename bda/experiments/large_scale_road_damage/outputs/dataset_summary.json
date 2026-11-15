@@ -1,0 +1,62 @@
+{
+  "dataset_name": "RDD2022 - Road Damage Dataset (India Split & Full CRDDC2022 Archive)",
+  "citation": "CRDDC 2022: Multi-national Road Damage Dataset (FigShare: 21431547)",
+  "archive_zip": {
+    "path": "D:\\Paventra\\bda\\dataset\\raw\\RDD2022_released_through_CRDDC2022.zip",
+    "bytes": 13264172619,
+    "mb": 12649.7,
+    "gb": 12.353
+  },
+  "extracted_statistics": {
+    "train_images": 7706,
+    "test_images": 1959,
+    "total_images": 9665,
+    "train_images_bytes": 519665922,
+    "test_images_bytes": 132775501,
+    "annotations_xml_count": 7706,
+    "annotations_xml_bytes": 3275918,
+    "total_extracted_bytes": 655717341,
+    "total_extracted_mb": 625.34,
+    "total_extracted_gb": 0.6107
+  },
+  "annotations_audit": {
+    "total_xml_files": 7706,
+    "malformed_xml_files": 0,
+    "missing_image_pairs": 0,
+    "images_with_damage_annotations": 3785,
+    "images_without_damage_annotations": 3921,
+    "total_annotated_objects": 8203,
+    "invalid_bounding_boxes": 0,
+    "class_distribution": {
+      "D40": 3187,
+      "D44": 1062,
+      "D00": 1555,
+      "D20": 2021,
+      "D01": 179,
+      "D11": 45,
+      "D10": 68,
+      "D50": 28,
+      "D43": 57,
+      "D0w0": 1
+    },
+    "class_distribution_percentages": {
+      "D40": 38.85,
+      "D44": 12.95,
+      "D00": 18.96,
+      "D20": 24.64,
+      "D01": 2.18,
+      "D11": 0.55,
+      "D10": 0.83,
+      "D50": 0.34,
+      "D43": 0.69,
+      "D0w0": 0.01
+    }
+  },
+  "data_integrity": {
+    "unreadable_corrupted_images": 0,
+    "sample_verified_images": 500,
+    "sample_duplicate_images": 0,
+    "test_split_unlabelled": true,
+    "test_split_purpose": "Unlabelled held-out evaluation for model generalization"
+  }
+}
